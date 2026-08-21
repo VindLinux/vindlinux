@@ -1,0 +1,94 @@
+# NullOS
+
+**A minimal Linux distribution built from scratch with musl, LLVM/Clang, BusyBox and runit.**
+
+> **NullOS is an experimental Linux distribution built from nothing, one component at a time.**
+
+## About
+
+NullOS is a minimalist Linux distribution focused on simplicity, control, and understanding how a Linux system works from the ground up.
+
+It is built manually rather than being based on an existing distribution. A Gentoo environment is currently used only as a temporary build environment; Gentoo is **not** part of the final system.
+
+The current system uses:
+
+* **musl** — C library
+* **LLVM/Clang** — default compiler and toolchain
+* **BusyBox** — core system utilities
+* **runit** — init and service supervision
+* **GRUB** — bootloader
+* **UEFI** — boot environment
+* **npkg** — native package manager
+
+## Current Status
+
+NullOS is currently **experimental and under active development**.
+
+The system can already:
+
+* Boot through UEFI and GRUB
+* Start the Linux kernel
+* Initialize through runit
+* Provide agetty terminals
+* Run system services
+* Provide SSH access
+* Install packages using npkg
+
+An official ISO is **not available yet**.
+
+The system is currently built directly into a target filesystem. A reproducible build system and bootable ISO are planned for the future.
+
+## How It Was Made
+
+NullOS follows a **Linux From Nothing (LFN)** approach.
+
+Development started from a Gentoo ISO used only as a temporary build environment. The system was gradually assembled inside:
+
+```text
+/mnt/nullos
+```
+
+Components were installed and configured individually until the resulting filesystem became a standalone, bootable Linux system.
+
+For a more detailed explanation, see:
+
+**[How NullOS Was Made](docs/how-it-was-made.md)**
+
+## Philosophy
+
+NullOS is built around a few simple ideas:
+
+* Keep the system small.
+* Understand what is running.
+* Avoid unnecessary dependencies.
+* Build components instead of inheriting an entire distribution.
+* Give the user control over the system.
+* Prefer simple, focused tools.
+
+NullOS is not trying to be everything for everyone.
+
+It is an experiment in building a Linux system from the ground up.
+
+## Repository Structure
+
+```text
+.
+├── docs/        # Documentation
+└── README.md
+```
+
+## Related Projects
+
+* **[npkg](https://github.com/Elgumi01/null-pkg-manager)** — NullOS package manager
+* **[null-packages](https://github.com/Elgumi01/null-packages)** — NullOS package recipes
+* **[gfetch](https://github.com/Elgumi01/gfetch)** — Minimal system information tool
+
+## Contributing
+
+NullOS is currently a personal experimental project, but contributions, ideas, bug reports, and discussions are welcome.
+
+If you find something broken, feel free to open an issue.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
