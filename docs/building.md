@@ -895,32 +895,32 @@ lambda --help
 
 ```bash
 cat > /etc/lambda/make.conf <<'EOF'
-# lambda build environment
+# Lambda build environment
 
-CC="gcc"
-CXX="g++"
+export CC="gcc"
+export CXX="g++"
 
-CFLAGS="-O2 -pipe -march=alderlake"
-CXXFLAGS="${CFLAGS}"
+export CFLAGS="-O2 -pipe -march=alderlake"
+export CXXFLAGS="${CFLAGS}"
 
 # Library and pkg-config paths.
 # Some packages, such as util-linux, may install libraries and their
 # pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
 # and /usr/lib64 so the linker and pkg-config can locate them during
 # builds, regardless of which directory provides the required files.
-LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
-LIBRARY_PATH="/usr/lib:/usr/lib64"
-PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
+export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
+export LIBRARY_PATH="/usr/lib:/usr/lib64"
+export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
 
-PREFIX="/usr"
+export PREFIX="/usr"
 
-MAKEOPTS="-j6"
+export MAKEOPTS="-j6"
 
 # Xorg-specific build environment (used by packages/xorg-libs and any
 # X11-related package).
 
-XORG_PREFIX="${PREFIX}"
-XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
+export XORG_PREFIX="${PREFIX}"
+export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
 EOF
 ```
 
@@ -1056,7 +1056,9 @@ Then reconcile:
 lambda reconcile
 ```
 
-If something fails, don't assume it's a real problem before trying `lambda reconcile` again.
+If a package fails to build, do not assume it is an actual problem immediately. Try running `lambda reconcile` again first.
+
+This can happen because some package dependencies are not fully tracked yet. As a result, a package may attempt to build before one of its required dependencies has been installed.
 
 ## 13. Pass 2, continued: moving to Clang/LLVM
 
@@ -1068,32 +1070,32 @@ Vind Linux's target compiler is Clang, not GCC — section 12 already pulled `ll
 
 ```bash
 cat > /etc/lambda/make.conf <<'EOF'
-# lambda build environment
+# Lambda build environment
 
-CC="clang"
-CXX="clang++"
+export CC="clang"
+export CXX="clang++"
 
-CFLAGS="-O2 -pipe -march=alderlake"
-CXXFLAGS="${CFLAGS}"
+export CFLAGS="-O2 -pipe -march=alderlake"
+export CXXFLAGS="${CFLAGS}"
 
 # Library and pkg-config paths.
 # Some packages, such as util-linux, may install libraries and their
 # pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
 # and /usr/lib64 so the linker and pkg-config can locate them during
 # builds, regardless of which directory provides the required files.
-LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
-LIBRARY_PATH="/usr/lib:/usr/lib64"
-PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
+export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
+export LIBRARY_PATH="/usr/lib:/usr/lib64"
+export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
 
-PREFIX="/usr"
+export PREFIX="/usr"
 
-MAKEOPTS="-j6"
+export MAKEOPTS="-j6"
 
 # Xorg-specific build environment (used by packages/xorg-libs and any
 # X11-related package).
 
-XORG_PREFIX="${PREFIX}"
-XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
+export XORG_PREFIX="${PREFIX}"
+export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
 EOF
 ```
 
