@@ -1,14 +1,16 @@
-# NullOS
+# Vind Linux
 
 **A minimal Linux distribution built from scratch with musl, LLVM/Clang, BusyBox and runit.**
 
-> **NullOS is an experimental Linux distribution built from nothing, one component at a time.**
+> **Vind Linux is an experimental Linux distribution built from nothing, one component at a time.**
 
 ## About
 
-NullOS is a minimalist Linux distribution focused on simplicity, control, and understanding how a Linux system works from the ground up.
+Vind Linux is a minimalist Linux distribution focused on simplicity, control, and understanding how a Linux system works from the ground up.
 
 It is built manually rather than being based on an existing distribution. A Gentoo environment is currently used only as a temporary build environment; Gentoo is **not** part of the final system.
+
+The project originally started as **NullOS**, was later renamed to **GroveOS**, and is now known as **Vind Linux**.
 
 The current system uses:
 
@@ -18,11 +20,11 @@ The current system uses:
 * **runit** — init and service supervision
 * **GRUB** — bootloader
 * **UEFI** — boot environment
-* **npkg** — native package manager
+* **Lambda** — package manager
 
 ## Current Status
 
-NullOS is currently **experimental and under active development**.
+Vind Linux is currently **experimental and under active development**.
 
 The system can already:
 
@@ -32,31 +34,31 @@ The system can already:
 * Provide agetty terminals
 * Run system services
 * Provide SSH access
-* Install packages using npkg
+* Install packages using Lambda
 
 An official ISO is **not available yet**.
 
-The system is currently built directly into a target filesystem. A reproducible build system and bootable ISO are planned for the future.
+The system is currently built directly into a target filesystem. If you want to try Vind Linux, you can build your own system by following the [Building Guide](docs/building.md).
+
+A reproducible build system and an official bootable ISO are planned for the future.
 
 ## How It Was Made
 
-NullOS follows a **Linux From Nothing (LFN)** approach.
+Vind Linux follows a **Linux From Nothing (LFN)** approach.
 
-Development started from a Gentoo ISO used only as a temporary build environment. The system was gradually assembled inside:
+Development started from a Gentoo ISO used only as a temporary build environment. The system was gradually assembled from individual components until the resulting filesystem became a standalone, bootable Linux system.
 
-```text
-/mnt/nullos
-```
+For a more detailed explanation of the project's development, see:
 
-Components were installed and configured individually until the resulting filesystem became a standalone, bootable Linux system.
+**[How Vind Linux Was Made](docs/how-it-was-made.md)**
 
-For a more detailed explanation, see:
+To build your own Vind Linux system:
 
-**[How NullOS Was Made](docs/how-it-was-made.md)**
+**[Building Guide](docs/building.md)**
 
 ## Philosophy
 
-NullOS is built around a few simple ideas:
+Vind Linux is built around a few simple ideas:
 
 * Keep the system small.
 * Understand what is running.
@@ -65,7 +67,7 @@ NullOS is built around a few simple ideas:
 * Give the user control over the system.
 * Prefer simple, focused tools.
 
-NullOS is not trying to be everything for everyone.
+Vind Linux is not trying to be everything for everyone.
 
 It is an experiment in building a Linux system from the ground up.
 
@@ -73,19 +75,20 @@ It is an experiment in building a Linux system from the ground up.
 
 ```text
 .
+├── configs/     # System and kernel configuration
 ├── docs/        # Documentation
+├── LICENSE      # Project license
 └── README.md
 ```
 
 ## Related Projects
 
-* **[npkg](https://github.com/Elgumi01/null-pkg-manager)** — NullOS package manager
-* **[null-packages](https://github.com/Elgumi01/null-packages)** — NullOS package recipes
-* **[gfetch](https://github.com/Elgumi01/gfetch)** — Minimal system information tool
+* **[lambda-manager](https://github.com/VindLinux/lambda-manager)** — Vind Linux package manager
+* **[packages](https://github.com/VindLinux/packages)** — Vind Linux package recipes
 
 ## Contributing
 
-NullOS is currently a personal experimental project, but contributions, ideas, bug reports, and discussions are welcome.
+Vind Linux is currently a personal experimental project, but contributions, ideas, bug reports, and discussions are welcome.
 
 If you find something broken, feel free to open an issue.
 
