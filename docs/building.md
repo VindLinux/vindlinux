@@ -226,9 +226,24 @@ If you open a new shell partway through this section, re-export these — otherw
 
 The C library itself — what every dynamically-linked binary in `$VIND` loads at runtime. Its `configure` script is custom (not autoconf-generated), so it doesn't take `--host`.
 
+Download the source:
+
 ```bash
 cd "$VIND/sources"
-curl -fL --retry 3 --retry-delay 2 -o musl-1.2.5.tar.gz https://musl.libc.org/releases/musl-1.2.5.tar.gz
+curl -fL --retry 3 --retry-delay 2 -o musl-1.2.5.tar.gz \
+    https://musl.libc.org/releases/musl-1.2.5.tar.gz
+```
+
+If the official musl server is unavailable, you can use the Void Linux sources mirror instead:
+
+```bash
+cd "$VIND/sources"
+wget https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz
+```
+
+Then extract and build:
+
+```bash
 tar -xf musl-1.2.5.tar.gz
 cd musl-1.2.5
 
@@ -245,7 +260,10 @@ Verify:
 find "$VIND" -name 'ld-musl-x86_64.so.1'
 ```
 
-Should list a file inside `$VIND/usr/lib`. If nothing shows up, dynamically-linked binaries won't run once you `chroot` — see the FAQ.
+This should list a file inside `$VIND/usr/lib`.
+
+If nothing is found, dynamically-linked binaries will not run once you `chroot` into the system. See the FAQ for troubleshooting.
+
 
 ### 7.2 Busybox
 
