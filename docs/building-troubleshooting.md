@@ -32,6 +32,17 @@ echo 'DL_CMD = wget -4 -c -O' >> config.mak
 ```
 This only affects `musl-cross-make`'s internal downloads. Any `curl` command written directly in this guide (sections 7 onward) would need `-4` added the same way if it hits the same issue on your host — e.g. `curl -4 -fL --retry 3 --retry-delay 2 -o ...`.
 
+**`make -j$(nproc)` (or any parallel `-j`) fails during the Pass 1 (or later) GCC build with a wall of `undefined reference to ...` errors from `ld` — things like `reg_renumber`, `this_target_ira`, `pc_set(rtx_insn const*)`, `loop_optimizer_init(unsigned int)` — spread across seemingly unrelated GCC object files (`lra-spills.o`, `cprop.o`, `fwprop.o`, `target-globals.o`, etc.), even though nothing looks wrong in the actual source.
+
+This is a race condition in GCC's own parallel build, not a real code or configuration problem. With `make -j` set high, GCC's internal Makefiles don't always serialize correctly, so `cc1`/`cc1plus`/`lto-dump` can get linked before every `.o` file it depends on has finished compiling — the linker then reports "undefined reference" for symbols that live in perfectly fine, just-not-yet-built source files. It's a known rough edge in `musl-cross-make`'s GCC stage, more likely to show up the higher your core count is.
+
+Fix it by cleaning and rebuilding without (or with much less) parallelism:
+```sh
+rm -rf build
+make -j1
+```
+It'll be noticeably slower, but should complete without the spurious linker errors. Once you've built successfully this way, you generally don't need to redo it — subsequent `make install` runs for other targets can go back to `-j$(nproc)`. If you want to keep some parallelism for future builds, try a conservative value (`-j4` rather than the full core count) — it's a tradeoff between speed and hitting this race again, not a guaranteed fix.
+
 ### Section 7 — Cross-build (general)
 
 **A package build fails with `cannot run C compiled programs`, or silently uses the host's glibc gcc instead of the musl cross-compiler.**
