@@ -13,7 +13,7 @@ This guide builds Vind Linux from a live host, through a working `chroot`, up to
 
 - **Phase 2 — Native.** `chroot` into Vind Linux and build everything else natively, with a plain `./configure && make && make install`. No cross flags, no `DESTDIR`, no host/target mismatches — this is where the bulk of the system gets built, including `lambda` (Vind Linux's package manager), LLVM/Clang, and eventually the bootloader.
 
-  Phase 2 starts out compiling everything with the Pass 2 GCC from Phase 1. Once LLVM/Clang exists, Vind Linux switches its own build environment to Clang and removes GCC from the final system — GCC's only job is to bootstrap the rest of the toolchain, not to ship as part of it (see section 13).
+  Phase 2 starts out using the Pass 2 GCC from Phase 1 just long enough to get `lambda` running (section 11) and to build LLVM/Clang (section 12) — GCC's only job is to bootstrap the rest of the toolchain, not to ship as part of it. Once Clang is confirmed working, Vind Linux removes GCC entirely (section 12.5) and builds the whole base system (section 13 onward) with Clang from the start, so nothing in the final system ever needs a second build to get off GCC's ABI.
 
 Packages built by hand early in this guide get reinstalled through `lambda` once it exists, so the system ends up with a proper manifest instead of files dropped in by hand — see section 11 for how `lambda` itself gets built and used.
 
@@ -300,11 +300,14 @@ sed -i \
     -e 's/^# CONFIG_HEAD is not set/CONFIG_HEAD=y/' \
     -e 's/^# CONFIG_TAIL is not set/CONFIG_TAIL=y/' \
     -e 's/^# CONFIG_WC is not set/CONFIG_WC=y/' \
+    -e 's/^# CONFIG_NTPD is not set/CONFIG_NTPD=y/' \
     -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' \
     .config
 
 make clean
 ```
+
+`CONFIG_NTPD=y` is enabled here — not used anywhere in Phase 1, but section 15.2 relies on `busybox ntpd` for a minimal one-shot clock sync at boot, and it's cheaper to flip this on now than to rebuild Busybox later just for one applet.
 
 #### Build
 
@@ -617,6 +620,16 @@ tar -tzf gettext-0.22.5.tar.gz >/dev/null && echo "gettext OK"
 ```
 
 `-t` just lists the archive's contents without extracting anything, so this is a cheap way to confirm each file is a valid, complete archive of the right compression type (`-z` for `.tar.gz`, `-J` for `.tar.xz`) before you're several packages deep inside the chroot. If any line doesn't print its `OK`, re-download that one file rather than proceeding — don't assume the others are fine just because these ran, since each archive can fail independently depending on which mirror it happened to land on. `cacert.pem` isn't a tar archive, so it isn't included here; eyeball it instead (`head -1 cacert.pem` should show a `#` comment line, not an HTML `<html>` tag — the latter means the download actually got an error page).
+
+`tar -tzf` only proves the archive isn't truncated or an HTML error page — it says nothing about whether the bytes are actually what upstream published. A mirror can serve a structurally valid, complete tarball that's still the wrong one (compromised mirror, MITM on a plain-HTTP fallback, stale cache serving an old CVE-affected release). This matters more here than in a normal package install, because everything in this batch runs with root privileges the moment it's built (`make install` as root inside the chroot), and `openssl`/`curl` specifically become the TLS trust anchor for every download after them — a tampered copy of either one undermines every "we verified this over HTTPS" claim made later in this guide. Check each archive's hash against the one upstream publishes before extracting:
+
+```sh
+sha256sum zlib-1.3.1.tar.gz perl-5.40.0.tar.gz openssl-3.5.7.tar.gz \
+    curl-8.11.0.tar.gz pkg-config-0.29.2.tar.gz wget-1.24.5.tar.gz \
+    jq-1.7.1.tar.gz git-2.47.0.tar.xz gettext-0.22.5.tar.gz
+```
+
+Compare the output against the `SHA256SUMS`/checksum file each project publishes next to its release (linked from the same release page as the tarball itself) — this guide doesn't pin the hashes inline since they change every time a version in this guide is bumped, but the comparison itself should never be skipped for anything landing outside the chroot's own `curl`-verified HTTPS chain. The same applies to every other hand-fetched tarball earlier in this guide (musl in 7.1, busybox in 7.2, flex in 7.4, and so on) — this note is placed here because 9.1 is the last batch fetched from the host rather than through the chroot's own (by-then-trusted) `curl`, but the habit should start in Phase 1, not here.
 
 `cacert.pem` isn't source code — it's the [Mozilla CA bundle that the curl project mirrors](https://curl.se/ca/cacert.pem) specifically for bootstrapping cases like this one. Nothing inside the chroot can be trusted to fetch its *own* trust store over HTTPS before it has one, so this rides in from the host the same way the tarballs do; section 10.1 (`openssl`) installs it as the default CA file once OpenSSL exists to use it.
 
@@ -989,6 +1002,8 @@ gcc, binutils, make, bash, coreutils, tar, gzip, xz, sed, grep
 
 (The upstream `lambda` README also lists `glibc` here — Vind Linux uses musl instead, so that entry doesn't apply as-is; worth updating the recipe conventions to say `musl` if this guide's toolchain choice is final.)
 
+**This list is aspirational at this exact point in the guide, not yet true.** Nothing built so far installs real GNU `bash`, `coreutils`, `tar`, `gzip`, or `sed` — the chroot is still running on Busybox's applets (section 7.2: `ash` as `/bin/sh`, plus its built-in `cp`/`tar`/`sed`/`grep`/etc.) and `dash` as the interactive shell. That's been enough to get here, since every step through section 11 only ever needed a POSIX-ish shell and the specific applets Busybox's `defconfig` enables. The recipe convention above describes where Vind Linux is *heading* — full GNU tool names on `PATH`, matching what most upstream `configure`/build scripts assume — not the state of the system in this chroot right now. Section 13's package list closes that gap by installing the real `bash` and `coreutils` (plus `gzip`/`grep`/`sed`, which Busybox's applets don't cover in this guide's `.config`) through `lambda` itself, so by the time you're writing your own recipes and relying on this convention, it's actually accurate. Until section 13 finishes, treat any recipe step that assumes GNU-specific flags (long options Busybox's applets don't implement, GNU `sed -i` with a backup suffix, etc.) as untested in this shell.
+
 Everything else — `zlib`, `ncurses`, `meson`, `cmake`, whatever a package actually needs — gets listed explicitly, even if it happens to already be present from an earlier step in this guide. The rule of thumb: if it's part of the guaranteed bootstrap toolchain, omit it; if it's a library or tool the package actually needs to build, list it.
 
 ### 11.6 DESTDIR
@@ -1003,13 +1018,135 @@ Not needed for anything in this guide (we're already native inside the chroot by
 
 ---
 
-## 12. Installing the base packages
+## 12. Bootstrapping Clang/LLVM
 
-At this point the system is very close to being complete. The remaining pieces are installed through `lambda` itself, instead of by hand, so they end up in `lambda`'s manifest with proper dependency tracking.
+An earlier pass of this guide built the entire base system first (the full package list now in section 13) under GCC, and only switched to Clang afterward. That ordering has a real problem: everything installed under GCC links against `libstdc++`, and switching `make.conf` to Clang afterward doesn't retroactively relink anything already on disk — it only affects packages built *after* the switch. Any C++ package caught on the wrong side of that line stays permanently mismatched with the rest of the system's `libc++`/`libc++abi` ABI (different exception-unwinding mechanism, different internal layouts for types like `std::string`), silently, until something actually tries to link across that boundary. Rather than document that as a known footgun, this section moves Clang's bootstrap ahead of the base system entirely: the only thing built under GCC is GCC's own manifest entry and LLVM itself, and everything from section 13 onward is compiled with Clang from its very first build. Nothing gets built twice, and nothing ends up on the wrong side of an ABI line.
 
-Replace `/etc/lambda/system.json` with the base package set below, then reconcile. This is going to take a long time — `lambda reconcile` resolves and builds this entire list from source, including LLVM.
+### 12.1 Adopt GCC into lambda's manifest and build LLVM/Clang
 
-`gcc` is deliberately included here, even though a working GCC (the Pass 2 compiler from section 8) is already on disk. That one was installed by hand, outside `lambda` entirely, so as far as `lambda`'s manifest is concerned GCC doesn't exist yet — there's nothing in there for `lambda` to ever cleanly remove. Listing `gcc` here has `lambda` build and install its own tracked copy (using the section 8 compiler to do it), which brings GCC under manifest management. That's what makes it possible to remove GCC cleanly later, once Clang is confirmed self-hosting (section 13) — a package `lambda` never installed can't be uninstalled through `lambda` either.
+Replace `/etc/lambda/system.json` with a minimal list — just enough to get Clang onto disk, not the rest of the system yet:
+
+```sh
+cat > /etc/lambda/system.json <<'EOF'
+{
+  "packages": [
+    "gcc",
+    "llvm"
+  ]
+}
+EOF
+
+lambda reconcile
+```
+
+`gcc` is included for the same reason it would be later regardless: the Pass 2 compiler on disk (section 8) was installed by hand, outside `lambda` entirely, so as far as `lambda`'s manifest is concerned GCC doesn't exist yet — there's nothing in there for `lambda` to ever cleanly remove. Listing it here has `lambda` build and install its own tracked copy (using the section 8 compiler to do it), which brings GCC under manifest management long enough to purge it cleanly in 12.5.
+
+`llvm` has to be built under GCC — there's no way around that chicken-and-egg step. LLVM's own build system needs a working C++ compiler to compile itself, and the only one that exists anywhere in the system at this point is the Pass 2 GCC. This is also why the list above is so short: LLVM is the *only* real package this guide needs GCC for. Everything else — all thirty-some packages in section 13 — has no such requirement and gains nothing from being built before Clang exists.
+
+This step is still going to take a while (LLVM is a large codebase), but it's a small fraction of the time section 13's full reconcile takes, and unlike the old ordering, none of this work gets redone later.
+
+### 12.2 Switch the build environment to Clang
+
+`lambda`'s default `make.conf` template assumes Clang (`CC=clang`, `CXX=clang++`); section 11.2 overrode it to GCC so 12.1's `gcc`/`llvm` build had a known-good, already-native compiler to work with. Now that Clang exists, switch back:
+
+```sh
+cat > /etc/lambda/make.conf <<'EOF'
+# Lambda build environment
+
+export CC="clang"
+export CXX="clang++"
+
+export CFLAGS="-O2 -pipe -march=alderlake"
+export CXXFLAGS="${CFLAGS}"
+
+# Library and pkg-config paths.
+# Some packages, such as util-linux, may install libraries and their
+# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
+# and /usr/lib64 so the linker and pkg-config can locate them during
+# builds, regardless of which directory provides the required files.
+export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
+export LIBRARY_PATH="/usr/lib:/usr/lib64"
+export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
+
+export PREFIX="/usr"
+
+export MAKEOPTS="-j6"
+
+# Xorg-specific build environment (used by packages/xorg-libs and any
+# X11-related package).
+
+export XORG_PREFIX="${PREFIX}"
+export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
+EOF
+```
+
+Confirm the shell itself can find Clang too, not just `lambda`'s build environment:
+
+```sh
+which clang clang++
+clang --version
+```
+
+### 12.3 Build the C++ runtime with Clang: libc++ and libc++abi
+
+GCC's C++ runtime (`libstdc++`) and Clang's (`libc++`) aren't interchangeable at the ABI level, so a Clang-based system needs its own. Build and install them through `lambda`, now that `make.conf` points at Clang — `lambda mutate append` both builds them and adds them to `system.json`, so they stay tracked going forward:
+
+```sh
+lambda mutate append libc++ libc++abi
+```
+
+### 12.4 Verify Clang can build packages on its own
+
+Before removing GCC, confirm Clang is actually capable of standing on its own — both as a compiler and for linking against the new `libc++`:
+
+```sh
+cat > /tmp/hello.cpp <<'EOF'
+#include <iostream>
+int main() {
+    std::cout << "hello from clang/libc++\n";
+    return 0;
+}
+EOF
+
+clang++ -stdlib=libc++ -o /tmp/hello-cpp /tmp/hello.cpp
+/tmp/hello-cpp
+```
+
+Then confirm `lambda reconcile` itself works end-to-end with Clang as the active compiler. `curl` is a good candidate for this — it's been sitting on disk since section 10.1, hand-built and untracked, exactly the kind of package the intro promised would eventually get "reinstalled through `lambda` once it exists." Folding it into the manifest now, under Clang, does double duty as both the verification step and that promised cleanup:
+
+```sh
+lambda mutate append curl
+lambda reconcile
+```
+
+If both of these succeed, Clang is genuinely doing the compiling from here on, not just sitting on disk unused.
+
+### 12.5 Remove GCC
+
+With Clang confirmed working, GCC has done its job: it built musl, itself (twice, in Phase 1), and LLVM/Clang. Nothing else in Vind Linux is meant to depend on it — and because section 13's base system hasn't been touched yet, removing GCC now means nothing installed from this point forward was ever built with it. Remove it from the manifest:
+
+```sh
+lambda mutate purge gcc
+lambda reconcile
+```
+
+Confirm it's actually gone, not just dropped from `system.json`:
+
+```sh
+which gcc      # should print nothing
+gcc --version  # should fail: command not found
+clang --version
+```
+
+From this point on, Clang/LLVM is the only compiler in Vind Linux's final system state — `gcc` will not appear in `system.json`, on disk, or in `lambda`'s manifest again unless deliberately reinstalled. If a specific package in section 13 turns out to genuinely need GCC (a GNU extension Clang doesn't accept, for instance), `lambda mutate append gcc` brings it back temporarily for that one build; purge it again afterward rather than leaving it installed indefinitely, or the whole point of this section is undone.
+
+## 13. Installing the base system
+
+With Clang in place and GCC gone, the rest of the base system installs through `lambda` the same way `gcc`/`llvm`/`libc++`/`libc++abi` just did — except this time every package in the list below compiles against `libc++`/`libc++abi` from its very first build, not as a later rebuild. That's the entire payoff of doing section 12 first: this reconcile only needs to happen once.
+
+Replace `/etc/lambda/system.json` with the full base package set below, then reconcile. This is going to take a long time — `lambda reconcile` resolves and builds this entire list from source. `llvm`, `libc++`, `libc++abi`, and `curl` are already installed from section 12 and stay listed here since `system.json` describes the system's whole desired state, not just what's new; leaving them out would tell `lambda` to remove them. `gcc` is deliberately *not* in this list — section 12.5 already purged it, and it should stay that way.
+
+`bash`, `coreutils`, `gzip`, `grep`, `sed`, and `tzdata` are included for the same reason discussed in section 11.5: the recipe convention of treating those first five as an already-guaranteed bootstrap toolchain only becomes true once they're actually installed, and this is where that happens. Once `lambda reconcile` finishes, real GNU `bash` replaces `dash`/`ash` as the interactive shell and `/bin/sh` (update `/etc/passwd`'s shell field and the `EOF`-terminated `#!/bin/sh` assumption in `/etc/profile` if you want `bash` as the default rather than just available), and GNU `coreutils`/`gzip`/`grep`/`sed` shadow the Busybox applets of the same name earlier in `$PATH`. `tzdata` provides the `/usr/share/zoneinfo` database that section 14.5 (timezone) and any package doing real date/time handling need — nothing before this point in the guide installs it, and musl's own C library has no bundled zoneinfo data the way some libc's do.
 
 ```sh
 cat > /etc/lambda/system.json <<'EOF'
@@ -1018,7 +1155,6 @@ cat > /etc/lambda/system.json <<'EOF'
     "busybox",
     "diffutils",
     "realpath",
-    "gcc",
     "libnl",
     "pkgconf",
     "libc++",
@@ -1068,7 +1204,13 @@ cat > /etc/lambda/system.json <<'EOF'
     "gfetch",
     "ca-certificates",
     "dbus",
-    "util-linux"
+    "util-linux",
+    "bash",
+    "coreutils",
+    "gzip",
+    "grep",
+    "sed",
+    "tzdata"
   ]
 }
 EOF
@@ -1083,105 +1225,6 @@ lambda reconcile
 If a package fails to build, do not assume it is an actual problem immediately. Try running `lambda reconcile` again first.
 
 This can happen because some package dependencies are not fully tracked yet. As a result, a package may attempt to build before one of its required dependencies has been installed.
-
-## 13. Pass 2, continued: moving to Clang/LLVM
-
-Vind Linux's target compiler is Clang, not GCC — section 12 already pulled `llvm` into the base system, built with the manifest-tracked GCC from that same step. This section switches the system's own build environment over to Clang/LLVM, confirms it actually works, and then removes GCC, which was only ever needed to get this far.
-
-### 13.1 Switch the build environment to Clang
-
-`lambda`'s default `make.conf` template assumes Clang (`CC=clang`, `CXX=clang++`); section 11.2 overrode it to GCC so the section 12 build had a known-good, already-native compiler to work with. Now that Clang exists, switch back:
-
-```sh
-cat > /etc/lambda/make.conf <<'EOF'
-# Lambda build environment
-
-export CC="clang"
-export CXX="clang++"
-
-export CFLAGS="-O2 -pipe -march=alderlake"
-export CXXFLAGS="${CFLAGS}"
-
-# Library and pkg-config paths.
-# Some packages, such as util-linux, may install libraries and their
-# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
-# and /usr/lib64 so the linker and pkg-config can locate them during
-# builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
-export LIBRARY_PATH="/usr/lib:/usr/lib64"
-export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
-
-export PREFIX="/usr"
-
-export MAKEOPTS="-j6"
-
-# Xorg-specific build environment (used by packages/xorg-libs and any
-# X11-related package).
-
-export XORG_PREFIX="${PREFIX}"
-export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
-EOF
-```
-
-Confirm the shell itself can find Clang too, not just `lambda`'s build environment:
-
-```sh
-which clang clang++
-clang --version
-```
-
-### 13.2 Build the C++ runtime with Clang: libc++ and libc++abi
-
-GCC's C++ runtime (`libstdc++`) and Clang's (`libc++`) aren't interchangeable at the ABI level, so a Clang-based system needs its own. Build and install them through `lambda`, now that `make.conf` points at Clang — `lambda mutate append` both builds them and adds them to `system.json`, so they stay tracked going forward:
-
-```sh
-lambda mutate append libc++ libc++abi
-```
-
-### 13.3 Verify Clang can build the system on its own
-
-Before removing GCC, confirm Clang is actually capable of standing on its own — both as a compiler and for linking against the new `libc++`:
-
-```sh
-cat > /tmp/hello.cpp <<'EOF'
-#include <iostream>
-int main() {
-    std::cout << "hello from clang/libc++\n";
-    return 0;
-}
-EOF
-
-clang++ -stdlib=libc++ -o /tmp/hello-cpp /tmp/hello.cpp
-/tmp/hello-cpp
-```
-
-Then confirm `lambda reconcile` itself works end-to-end with Clang as the active compiler, by rebuilding something already tracked — `curl` is a low-risk pick:
-
-```sh
-lambda mutate append curl
-lambda reconcile
-```
-
-If both of these succeed, Clang is genuinely doing the compiling from here on, not just sitting on disk unused.
-
-### 13.4 Remove GCC
-
-With Clang confirmed working, GCC has done its job: it built musl, itself (twice, in Phase 1), and eventually LLVM/Clang. Nothing in the final Vind Linux system is meant to depend on it. Remove it from the manifest:
-
-```sh
-lambda mutate purge gcc
-lambda reconcile
-```
-
-Confirm it's actually gone, not just dropped from `system.json`:
-
-```sh
-which gcc      # should print nothing
-gcc --version  # should fail: command not found
-clang --version
-```
-
-From this point on, Clang/LLVM is the only compiler in Vind Linux's final system state — `gcc` will not appear in `system.json`, on disk, or in `lambda`'s manifest again unless deliberately reinstalled.
 
 ## 14. System configuration
 
@@ -1265,7 +1308,20 @@ passwd
 
 The `root` user uses UID `0` and GID `0`.
 
-### 14.2 Configuring the hostname
+### 14.2 Creating a non-root user (optional)
+
+Everything up to this point in the guide runs as `root` — there's no other choice inside a chroot, and every package built by hand or through `lambda` so far installs as root regardless. That's fine for finishing the build, but running your day-to-day session as `root` afterward is worth avoiding for the usual reason: any bug in something as ordinary as a text editor or a web browser runs with full filesystem access instead of a limited one. `shadow` (installed in section 13) provides `useradd`/`usermod`/`groupadd`, the same tools that created `root`'s account structure above:
+
+```sh
+useradd -m -G wheel -s /bin/sh <username>
+passwd <username>
+```
+
+`-m` creates the home directory (`/home/<username>`), matching the `home` directory this guide's section 5 already created at the top level. `-G wheel` adds the account to a `wheel` group for later use with `su`/a `sudo`-equivalent — Busybox provides neither `sudo` nor a working `su` on its own (section 11.4's note about `sudo` still applies), so privilege escalation for this user is deliberately left unconfigured here rather than half-configured with a tool that doesn't exist yet. Installing and configuring `sudo` (or `doas`, or relying on `su` plus a shared root password) is a policy decision this guide doesn't make on your behalf — do it through `lambda` once you've picked one.
+
+This step is skippable if Vind Linux is being built purely as a base for something else (a container image, a recovery environment, a from-scratch appliance) where a `root`-only account is the actual intended end state — nothing later in this guide depends on a non-root user existing.
+
+### 14.3 Configuring the hostname
 
 Create `/etc/hostname` and define the system hostname:
 
@@ -1273,7 +1329,7 @@ Create `/etc/hostname` and define the system hostname:
 echo "vind-linux" > /etc/hostname
 ```
 
-### 14.3 Configuring /etc/profile
+### 14.4 Configuring /etc/profile
 
 Basic `/etc/profile`:
 
@@ -1289,11 +1345,35 @@ export EDITOR=vi
 
 umask 22
 
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
 export PS1='\u@\h:\w\$ '
 EOF
 ```
 
-### 14.4 Configuring available shells
+`LANG`/`LC_ALL` are set to `C.UTF-8` rather than left unset or pointed at something like `en_US.UTF-8`. This isn't the same situation as a glibc-based distro: glibc ships (and, on most distros, lets you generate via `locale-gen`) a real locale database under `/usr/lib/locale` with actual collation rules, date formats, and so on per locale. musl doesn't — musl's locale support is intentionally minimal, and in practice it treats any locale name it doesn't specifically recognize as `C`/`POSIX` and moves on, rather than erroring. `C.UTF-8` is the one exception worth setting explicitly: it gets programs UTF-8-aware string handling (multibyte-safe `wc`, correct-width terminal output, etc.) without depending on a locale database musl doesn't ship. Setting `LANG` to something like `en_US.UTF-8` on this system won't produce an error, but it also won't produce US date/number formatting — it'll silently behave exactly like `C.UTF-8`, which is worth knowing before spending time debugging why a locale-dependent format string isn't doing what it would on a glibc system.
+
+### 14.5 Timezone
+
+`/etc/localtime` is how every timezone-aware program (`date`, log timestamps, anything using the C library's `localtime()`) finds out the system's local offset from UTC — without it, the system defaults to UTC, which is a reasonable fallback but not usually what you actually want. This needs the `tzdata` package (section 13) installed first, since that's what provides the `/usr/share/zoneinfo` database `/etc/localtime` points into:
+
+```sh
+ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+```
+
+Replace `America/Sao_Paulo` with whichever zone applies — `ls /usr/share/zoneinfo` lists everything `tzdata` installed, organized the same `Region/City` way as on any other Linux distro, since the zoneinfo database itself is upstream, not something this guide or musl redefines. There's no separate `/etc/timezone` file to keep in sync the way some glibc distros use — `/etc/localtime` being a symlink to the right zoneinfo file is the whole mechanism musl's C library reads.
+
+If the system's hardware clock (RTC) isn't already set to UTC — a common default on a fresh VM — `hwclock`, from `util-linux` (already in section 13's package set), can check and correct it once a kernel is installed and `/dev/rtc` exists:
+
+```sh
+hwclock --show
+hwclock --systohc --utc
+```
+
+This only matters once there's a kernel to expose `/dev/rtc` at all (section 16.2), so it's easy to defer past this point in the guide — 15.4's one-shot `ntpd` correction at every boot covers for a wrong RTC in the meantime, just less precisely than a correctly-set hardware clock would.
+
+### 14.6 Configuring available shells
 
 Create `/etc/shells` and list the shells available on the system:
 
@@ -1307,6 +1387,8 @@ EOF
 
 ## 15. Networking
 
+`/etc/resolv.conf` (below) is the only piece of networking this guide has actually needed so far — it's what let `git`/`curl` inside the chroot resolve hostnames at all back in section 10.1. It says nothing about how an interface gets an address in the first place, which matters once you're booting on real hardware (or a VM) instead of relying on whatever the live ISO's own network setup left behind. This section covers that: bringing an interface up automatically, keeping the clock correct enough for TLS to keep working after reboot, and where firewalling would fit if you need it. The actual "start this at boot" wiring depends on `runit` (installed in section 16.3, right after this), so the pieces below are configuration only — section 16.3 comes back and turns them into running services once there's an init system to hand them to.
+
 ### 15.1 Configuring DNS
 
 Create `/etc/resolv.conf` with the DNS servers to use:
@@ -1318,7 +1400,69 @@ nameserver 8.8.8.8
 EOF
 ```
 
-(Still a WIP.)
+This is the same file section 10.1 created before `git clone`d `lambda-manager` — repeated here because a DHCP client (15.2) will typically want to overwrite it with whatever the network hands out, and it's worth having a known-good static fallback on disk in case that ever needs debugging.
+
+### 15.2 Wired networking with dhcpcd
+
+`dhcpcd` is already part of the base package set installed in section 13 — Busybox's applet list (section 7.2) doesn't enable `udhcpc`, so this is the only DHCP client anywhere in this system, not one option among several. Confirm the interface name first; `eudev` (also in section 13's package set) is what assigns it, and on a VM built the way section 1–4 set this one up, it's usually something like `enp0s3` or `eth0`, not a name you get to choose:
+
+```sh
+ip link
+```
+
+A minimal `/etc/dhcpcd.conf` is enough to get an address automatically on whichever interface `dhcpcd` finds:
+
+```sh
+mkdir -p /etc
+cat > /etc/dhcpcd.conf << 'EOF'
+# Minimal dhcpcd config for Vind Linux.
+hostname
+option rapid_commit
+option domain_name_servers, domain_name, domain_search
+option classless_static_routes
+option interface_mtu
+require dhcp_server_identifier
+slaac private
+EOF
+```
+
+This is upstream `dhcpcd`'s own recommended baseline (privacy-preserving SLAAC, a couple of DHCP options most networks expect a client to request) rather than anything Vind-specific — nothing here depends on musl or on choices made earlier in this guide. Test it by hand once, before wiring it into `runit` in 16.3:
+
+```sh
+dhcpcd <interface-name>
+ip addr show <interface-name>
+```
+
+If an address shows up and `cat /etc/resolv.conf` now shows whatever DNS servers the network handed out (overwriting the static ones from 15.1), it worked. `dhcpcd -k <interface-name>` releases the lease and tears the config back down if you want to retest.
+
+### 15.3 Wireless networking with iwd (optional)
+
+`iwd` is also already in section 13's package set, for laptops/hardware where a wired connection isn't an option — skip this subsection entirely on a VM built per sections 1–4, since virtual NICs are wired by definition. `iwd` ships its own control CLI, `iwctl`:
+
+```sh
+iwctl
+[iwd]# device list
+[iwd]# station <device> scan
+[iwd]# station <device> get-networks
+[iwd]# station <device> connect <SSID>
+[iwd]# exit
+```
+
+`iwd` handles authentication and the link itself, but — unlike some other wireless daemons — it doesn't run a DHCP client or touch `/etc/resolv.conf` on its own; once `station connect` succeeds, the interface is associated but still has no IP address until `dhcpcd` (15.2) runs against it the same way it would against a wired interface. `iwd` stores known-network credentials under `/var/lib/iwd`, so reconnecting after a reboot only needs 15.4's boot-time wiring, not re-entering a passphrase.
+
+### 15.4 Time synchronization
+
+This is easy to skip and easy to regret skipping: without a battery-backed RTC keeping reasonable time across reboots (common on VMs and some real hardware), the system can come up with a clock that's wrong by hours or years. That's not just cosmetic — every TLS handshake `curl`, `git`, or `lambda reconcile` does depends on the certificate's validity window, and OpenSSL (built in section 10.1) rejects a handshake with an otherwise-perfectly-good certificate if the system clock thinks it hasn't started yet, or has already expired. This is why `CONFIG_NTPD=y` was enabled back in section 7.2 — Busybox's `ntpd` applet is enough for a one-shot correction and doesn't pull in a separate package:
+
+```sh
+busybox ntpd -n -q -p pool.ntp.org
+```
+
+`-n` keeps it in the foreground instead of daemonizing, `-q` exits immediately after the first successful sync instead of continuing to run and slew the clock over time, and `-p pool.ntp.org` picks a server explicitly rather than relying on Busybox's compiled-in default (which may not be reachable everywhere). Section 16.3 runs this once, early, as part of the boot sequence, before anything that depends on TLS gets a chance to run. This is deliberately a one-shot correction, not continuous drift discipline — if the system stays up for weeks at a time and needs its clock kept accurate throughout (rather than just correct right after boot), that's a case for a real NTP daemon (`chrony`, `openntpd`) installed through `lambda` once the base system exists; not covered by this guide.
+
+### 15.5 A note on firewalling
+
+Nothing in section 13's package list provides a firewall (`nftables`/`iptables`), and this guide doesn't set one up. That's a deliberate scope decision, not an oversight: a sensible default ruleset depends heavily on what the machine is actually going to do (a workstation behind a router needs very different rules than something with a public IP), and shipping one here would either be a no-op default-allow policy that gives false confidence, or a set of assumptions about your network that don't hold. If you need one, `nftables` can be installed the same way as anything else in section 13 (`lambda mutate append nftables`) once the base system is up; writing the ruleset itself is out of scope for this guide.
 
 ## 16. Preparing for boot
 
@@ -1367,6 +1511,8 @@ echo 'omit_dracutmodules+=" i18n "' > /etc/dracut.conf.d/no-i18n.conf
 
 With these in place, `dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>` should complete successfully.
 
+**CPU microcode (optional, real hardware only).** Skip this on a VM — the hypervisor's own vCPU presentation doesn't need or use it. On real hardware, the kernel can load a CPU microcode update very early in boot (before most of the kernel itself has initialized) to patch certain silicon-level bugs and security issues that a BIOS/UEFI update alone doesn't always cover. This isn't packaged anywhere in this guide's `lambda` recipes yet — Intel and AMD each publish their own microcode bundles (`intel-ucode`/`linux-firmware`'s AMD equivalent), and getting one installed and picked up by `dracut`'s early-microcode mechanism is a real gap in Vind Linux's current package set, not something worked around here. If this matters for your hardware, it's worth writing a `lambda` recipe for it before relying on this build long-term.
+
 ### 16.3 Init system
 
 **runit** is the default init system for Vind. However, Vind follows an **init-freedom** approach, so you are free to use another init system if you prefer.
@@ -1382,9 +1528,42 @@ lambda reconcile
 
 `vind-runit` installs runit along with basic utilities and the default stage scripts required by Vind.
 
+#### 16.3.1 Wiring up networking and time sync
+
+Section 15 prepared `dhcpcd`'s config and enabled Busybox `ntpd`, but stopped short of making either run automatically — there was no init system yet to hand them to. There is now. `runit` services live under `/etc/sv/<name>`, each with a `run` script that `exec`s the long-running process directly (no forking, no PID files — that's `runsvdir`'s job, not the service's own); enabling one is a matter of symlinking it into `/etc/service`, which `runsvdir` watches:
+
+`dhcpcd`'s own `-B`/`--background` flag (the default behavior most other init systems expect) would be wrong here: it tells `dhcpcd` to fork and exit its parent, but the `run` script's own process exiting is exactly what tells `runsv` a service has died — `runsv` would immediately respawn it, spawning another backgrounded copy on top of the first, forever. `exec dhcpcd --nobackground` avoids that: `exec` replaces the `run` script's own process with `dhcpcd` itself, running in the foreground, so the process `runsv` is watching and the process actually doing the work are the same one.
+
+```sh
+mkdir -p /etc/sv/dhcpcd/log
+cat > /etc/sv/dhcpcd/run << 'EOF'
+#!/bin/sh
+exec dhcpcd --nobackground
+EOF
+chmod +x /etc/sv/dhcpcd/run
+
+ln -sf /etc/sv/dhcpcd /etc/service/dhcpcd
+```
+
+Time sync is a one-shot job, not a long-running daemon (15.4 deliberately used `ntpd -n -q`, which exits after the first successful correction) — `runit` handles that as a `run` script that does its work and exits cleanly, rather than something meant to be respawned forever:
+
+```sh
+mkdir -p /etc/sv/ntpsync
+cat > /etc/sv/ntpsync/run << 'EOF'
+#!/bin/sh
+busybox ntpd -n -q -p pool.ntp.org
+exec sleep 999999
+EOF
+chmod +x /etc/sv/ntpsync/run
+
+ln -sf /etc/sv/ntpsync /etc/service/ntpsync
+```
+
+The trailing `sleep` isn't decorative — a `run` script that exits immediately after a successful one-shot job looks, to `runsv`, identical to a crashing daemon, and gets respawned in a tight loop (visible as constant CPU churn from repeated `ntpd` invocations hammering the same NTP server). Sleeping keeps the "service" alive without repeating the sync; `runit` naturally re-runs `ntpd` on the next reboot, which is the only time this actually needs to happen again.
+
 ### 16.4 Bootloader (GRUB)
 
-`grub` and `efibootmgr` are already installed as part of section 12's package set. Install GRUB into the EFI System Partition mounted at `/boot/efi` (section 4), and generate its configuration:
+`grub` and `efibootmgr` are already installed as part of section 13's package set. Install GRUB into the EFI System Partition mounted at `/boot/efi` (section 4), and generate its configuration:
 
 ```sh
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=VindLinux --removable
@@ -1421,3 +1600,24 @@ reboot
 ```
 
 Remove the live ISO/installer media before the system restarts, so the firmware boots from `/dev/vda` instead of the live environment again. Once GRUB starts and hands off to Vind Linux's own kernel (section 16.2) and init (section 16.3), the system built by this guide is up and running on its own.
+
+### 16.6 Post-boot smoke test
+
+A short checklist to run before trusting this install for anything real — each of these exercises a different part of the guide, so a failure here points back at a specific section rather than "something's wrong somewhere":
+
+```sh
+whoami              # 14.1 — user database resolves UID 0 to root
+uname -a             # 16.2 — confirms the kernel that's actually running
+mount | grep vda3    # 2/16.1 — root is mounted from the right partition
+ip addr show         # 15.2/16.3.1 — dhcpcd brought an interface up
+cat /etc/resolv.conf  # 15.1 — DNS config is in place (static or DHCP-provided)
+date                 # 15.4 — clock is sane, not 1970 or decades off
+ping -c 1 1.1.1.1     # network reaches the outside world
+curl -sI https://github.com  # 10.1 — TLS trust chain actually works end to end
+gcc --version 2>&1 | head -1  # should fail: "command not found" — 12.5 removed it
+clang --version      # 12.2 — Clang is the live compiler
+lambda --help        # 11.1 — package manager is intact post-reboot
+sv status dhcpcd ntpsync  # 16.3.1 — both services are up under runit
+```
+
+If everything above checks out, the system isn't just booting — every subsystem this guide built (toolchain, package manager, networking, time, TLS trust) is actually working together, not just present on disk.
