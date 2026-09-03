@@ -149,6 +149,15 @@ GCC_VER = 13.3.0
 EOF
 ```
 
+Ensure the resolv.conf:
+
+```sh
+cat > /etc/resolve.conf <<'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+```
+
 If your host has a broken or non-routable IPv6 setup (common on cloud/VM images — see building-troubleshooting.md), also add a line forcing downloads over IPv4, since `musl-cross-make` fetches its sources itself during `make`:
 
 ```sh
