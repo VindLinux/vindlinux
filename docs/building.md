@@ -25,6 +25,17 @@ Packages built by hand early in this guide get reinstalled through `lambda` once
 
 We use a Gentoo LiveGUI ISO as the host, since it ships with most tools we need.
 
+Set the host's DNS resolver before anything else in this guide tries to reach the network — `git clone` (section 6), `musl-cross-make`'s own source fetches, and every `wget`/`curl` from here through the end of Phase 1 all depend on it, and a live ISO's default resolver setup can't be relied on (some ship with none configured at all, others hand you whatever the DHCP lease on the install network provided, which may not survive a network change mid-build):
+
+```sh
+cat > /etc/resolv.conf << 'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
+```
+
+This is the same pair of resolvers section 15.1 sets up again later, inside the chroot — that one configures the *target* system's `/etc/resolv.conf`, entirely separate from the host's. They happen to live in different files on different filesystems, so setting one doesn't carry over to the other.
+
 ## 2. Partition the disk
 
 List your disks and find the target one:
@@ -149,15 +160,6 @@ GCC_VER = 13.3.0
 EOF
 ```
 
-Ensure the resolv.conf:
-
-```sh
-cat > /etc/resolve.conf <<'EOF'
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-EOF
-```
-
 If your host has a broken or non-routable IPv6 setup (common on cloud/VM images — see building-troubleshooting.md), also add a line forcing downloads over IPv4, since `musl-cross-make` fetches its sources itself during `make`:
 
 ```sh
@@ -176,6 +178,8 @@ make install
 ```
 
 This builds binutils, a bootstrap gcc, musl, then the final gcc linked against musl. If a previous attempt failed partway through, run `rm -rf build` before retrying.
+
+If `make install` fails to download a source tarball (`502 Bad Gateway`, connection reset, etc.), or keeps re-downloading one you already fetched by hand — see building-troubleshooting.md.
 
 Put it on your `PATH`:
 
@@ -232,7 +236,7 @@ export MAKEOPTS=-j$(nproc)
 export PATH="$TOOLS/bin:$PATH"
 ```
 
-If you open a new shell partway through this section, re-export these — otherwise builds silently fall back to the host's own glibc compiler instead of failing loudly.
+If you open a new shell partway through this section, re-export these — otherwise builds silently fall back to the host's own glibc compiler instead of failing loudly (see building-troubleshooting.md).
 
 ### 7.1 musl
 
@@ -325,7 +329,7 @@ CC="$CC" AR=/usr/bin/ar RANLIB=/usr/bin/ranlib STRIP=/usr/bin/strip \
 make $MAKEOPTS
 ```
 
-Don't pass `--sysroot` here (an earlier draft of this section set `CFLAGS='--sysroot=/' LDFLAGS='--sysroot=/'`). The Pass 1 cross-compiler from section 6 already defaults to its own bundled musl sysroot — that's the entire point of building it with `musl-cross-make`. Overriding it to `--sysroot=/` points the compiler at the **host's** root filesystem instead, i.e. Gentoo's own glibc headers under `/usr/include`, which is exactly the kind of host/target header mismatch section 6 warns about. Busybox is statically linked (`CONFIG_STATIC=y`), so this wouldn't necessarily fail loudly — it can silently pick up glibc struct layouts/macros at compile time while still linking against musl's `crt`/`libc.a`, producing a binary that builds cleanly but misbehaves at runtime. Leave `CFLAGS`/`LDFLAGS` unset and let the cross-compiler use its own default sysroot.
+Don't pass `--sysroot` here (an earlier draft of this section set `CFLAGS='--sysroot=/' LDFLAGS='--sysroot=/'`). The Pass 1 cross-compiler from section 6 already defaults to its own bundled musl sysroot — that's the entire point of building it with `musl-cross-make`. Overriding it to `--sysroot=/` points the compiler at the **host's** root filesystem instead, i.e. Gentoo's own glibc headers under `/usr/include`, which is exactly the kind of host/target header mismatch section 6 warns about. Busybox is statically linked (`CONFIG_STATIC=y`), so this wouldn't necessarily fail loudly — it can silently pick up glibc struct layouts/macros at compile time while still linking against musl's `crt`/`libc.a`, producing a binary that builds cleanly but misbehaves at runtime. Leave `CFLAGS`/`LDFLAGS` unset and let the cross-compiler use its own default sysroot. If Busybox already built without those flags set but still misbehaves at runtime, see building-troubleshooting.md.
 
 #### Install
 
@@ -489,7 +493,7 @@ file "$VIND/usr/bin/as" "$VIND/usr/bin/ld"
 
 Both should show `ld-musl-x86_64.so.1`, not glibc — and definitely not the host's binutils under `$TOOLS`.
 
-This has to be done before entering the chroot (section 9) — without it, `gcc` inside the chroot can produce assembly but has nothing to turn it into an actual object file, which is exactly the `cannot execute 'as'` error you get if this step is skipped.
+This has to be done before entering the chroot (section 9) — without it, `gcc` inside the chroot can produce assembly but has nothing to turn it into an actual object file, which is exactly the `cannot execute 'as'` error you get if this step is skipped. See building-troubleshooting.md if `configure` fails partway through a subdirectory despite `--build` being set explicitly above, or if you're already inside the chroot when you discover this step was skipped.
 
 ### 7.7 Linux kernel headers
 
@@ -560,8 +564,10 @@ make DESTDIR="$DESTDIR" install
 
 - `/usr/bin/gcc -dumpmachine` (absolute path) gives the real host triple without going through `config.guess`, which is unreliable here since the shell environment is deliberately biased toward the cross-compiler.
 - `CC_FOR_BUILD=/usr/bin/gcc` makes sure the build-time tools (which run *now*, on the live ISO) use the host's native compiler — only the final target compiler uses the musl cross-compiler.
-- `--with-build-sysroot="$VIND"` tells this GCC where to find musl's headers and libs (already installed in section 7.1) while it's being built on the host. This is different from `--with-sysroot`, which would bake that same absolute host path (`$VIND`, e.g. `/mnt/vind`) into the compiler as its permanent default — breaking it the moment you `chroot` in, since that path stops meaning anything once `$VIND` becomes `/`. `--with-build-sysroot` only affects this build; the resulting compiler defaults to sysroot `/`, which is exactly right once it's running natively inside the chroot.
+- `--with-build-sysroot="$VIND"` tells this GCC where to find musl's headers and libs (already installed in section 7.1) while it's being built on the host. This is different from `--with-sysroot`, which would bake that same absolute host path (`$VIND`, e.g. `/mnt/vind`) into the compiler as its permanent default — breaking it the moment you `chroot` in, since that path stops meaning anything once `$VIND` becomes `/`. `--with-build-sysroot` only affects this build; the resulting compiler defaults to sysroot `/`, which is exactly right once it's running natively inside the chroot. (If `--with-sysroot` gets used by mistake here, the symptom shows up later, inside the chroot, as headers not found at paths that clearly exist — see building-troubleshooting.md.)
 - `--disable-bootstrap` skips GCC's usual 3-stage self-bootstrap, which doesn't apply here since we're cross-building it once.
+
+If `configure`/`make` for this step picks up the host's glibc headers instead of musl's (`CPATH`/`C_INCLUDE_PATH`/`CPLUS_INCLUDE_PATH` set in the shell are the usual cause), or if `libstdc++` itself fails to build with a `__to_xstring`-related error, see building-troubleshooting.md — both are covered there.
 
 Verify the result is actually a musl binary meant to run inside the chroot, not the host:
 
@@ -663,9 +669,9 @@ chroot "$VIND" /bin/dash
 
 ### 9.3 Reset the environment for native builds
 
-`chroot` only changes the filesystem root — it does **not** clear environment variables. Every Phase 1 export (`CC`, `PREFIX`, `DESTDIR`, `HOST`, `TOOLS`, and the `$TOOLS/bin`-prefixed `PATH`) is still set in this shell, and now points at things that don't work inside the chroot: `$CC` is still the Pass 1 cross-compiler's absolute host path, which `configure` scripts will use directly (`autoconf`'s `AC_PROG_CC` prefers an already-set `$CC` over searching `PATH` itself) — and that binary can't even execute here, since it's a glibc-linked binary and this chroot has no glibc runtime, only musl. Left in place, this produces `configure: error: C compiler cannot create executables` on the very first package you try to build.
+`chroot` only changes the filesystem root — it does **not** clear environment variables. Every Phase 1 export (`CC`, `PREFIX`, `DESTDIR`, `HOST`, `TOOLS`, and the `$TOOLS/bin`-prefixed `PATH`) is still set in this shell, and now points at things that don't work inside the chroot: `$CC` is still the Pass 1 cross-compiler's absolute host path, which `configure` scripts will use directly (`autoconf`'s `AC_PROG_CC` prefers an already-set `$CC` over searching `PATH` itself) — and that binary can't even execute here, since it's a glibc-linked binary and this chroot has no glibc runtime, only musl. Left in place, this produces `configure: error: C compiler cannot create executables` on the very first package you try to build (see building-troubleshooting.md if this happens in a later shell that skipped this reset).
 
-`$DESTDIR` is the more dangerous one of these, because leaving it set doesn't fail loudly. It's still `$VIND` (e.g. `/mnt/vind`) from section 7, and most `make install` targets honor `$DESTDIR` automatically without you passing it explicitly. Since you're now *inside* the chroot, that same string is just a path — `make install` happily creates `/mnt/vind/usr/lib` etc. as an ordinary, empty subdirectory of the chroot itself, and installs everything there instead of into the real `/usr/lib`. The build succeeds, `make install` reports no error, and the package is simply missing from where anything else will ever look for it.
+`$DESTDIR` is the more dangerous one of these, because leaving it set doesn't fail loudly. It's still `$VIND` (e.g. `/mnt/vind`) from section 7, and most `make install` targets honor `$DESTDIR` automatically without you passing it explicitly. Since you're now *inside* the chroot, that same string is just a path — `make install` happily creates `/mnt/vind/usr/lib` etc. as an ordinary, empty subdirectory of the chroot itself, and installs everything there instead of into the real `/usr/lib`. The build succeeds, `make install` reports no error, and the package is simply missing from where anything else will ever look for it (see building-troubleshooting.md).
 
 Clear the Phase 1 (host/cross) variables, then set the native ones this chroot actually needs. Every build in Phase 2 assumes both halves of this have already run:
 
@@ -721,7 +727,7 @@ make
 make install
 ```
 
-zlib's `configure` is a custom script (not autotools). Unlike the autotools scripts used everywhere else in this guide, it doesn't reliably search `PATH` for a compiler on its own — even with a perfectly working `gcc` on `PATH` (confirm with `gcc --version`), it can still abort with `Missing or broken C compiler.` unless `$CC` is set explicitly first, hence the `export CC=gcc` above (already set as part of section 9.3, but harmless to repeat). `--prefix` works the same as with autotools, though. Only needed here because git's build requires it unconditionally — nothing else in this guide links against it yet. `zlib.net` only serves the *current* release at the short URL pattern (`zlib.net/zlib-<version>.tar.gz`); older releases, including this one, live under `zlib.net/fossils/zlib-<version>.tar.gz` instead — see building-troubleshooting.md if the pinned version here goes stale too.
+zlib's `configure` is a custom script (not autotools). Unlike the autotools scripts used everywhere else in this guide, it doesn't reliably search `PATH` for a compiler on its own — even with a perfectly working `gcc` on `PATH` (confirm with `gcc --version`), it can still abort with `Missing or broken C compiler.` unless `$CC` is set explicitly first, hence the `export CC=gcc` above (already set as part of section 9.3, but harmless to repeat; see building-troubleshooting.md if it still aborts). `--prefix` works the same as with autotools, though. Only needed here because git's build requires it unconditionally — nothing else in this guide links against it yet. `zlib.net` only serves the *current* release at the short URL pattern (`zlib.net/zlib-<version>.tar.gz`); older releases, including this one, live under `zlib.net/fossils/zlib-<version>.tar.gz` instead — see building-troubleshooting.md if the pinned version here goes stale too.
 
 zlib is a library, not a program — there's no `zlib` command to run afterward. Verify the install landed in the right place instead:
 
@@ -753,7 +759,7 @@ perl -v
 
 #### openssl
 
-This is what actually gives `curl`/`wget` — and, transitively, `git` — real HTTPS support: a TLS library, not just an HTTP client. It needs the `perl` built just above to run its own `Configure` script; there's no autotools/CMake alternative for OpenSSL's build system, the same way there's none for musl's.
+This is what actually gives `curl`/`wget` — and, transitively, `git` — real HTTPS support: a TLS library, not just an HTTP client. It needs the `perl` built just above to run its own `Configure` script; there's no autotools/CMake alternative for OpenSSL's build system, the same way there's none for musl's. See building-troubleshooting.md if `Configure` can't find `perl` even though it was just built.
 
 ```sh
 cd /usr/src
@@ -765,7 +771,7 @@ make
 make install
 ```
 
-- `--libdir=lib` overrides OpenSSL's own default, which is not simply `--prefix/lib`: for the `linux-x86_64` target, `Configure` assumes a multilib layout and picks `lib64` for the actual shared objects (visible in the build log as e.g. `-DENGINESDIR="\"/usr/lib64/engines-3\""`), the same convention a multilib glibc distro uses to keep 32-bit and 64-bit libraries apart. Vind Linux has no such split — section 7.1 installed musl itself straight into `/usr/lib` (`--syslibdir="$PREFIX/lib"`), and nothing in this guide ever creates a `/usr/lib64`. Left at its default, `make install` drops `libssl.so`/`libcrypto.so` into a `/usr/lib64` that nothing else uses or looks in, and every program linked against them — starting with the `openssl` binary itself — fails at startup with `Error loading shared library libssl.so.3: No such file or directory`, even though the file exists, just one directory over. `--libdir=lib` makes `Configure` install everything into `/usr/lib` instead, matching where musl's dynamic loader actually searches by default.
+- `--libdir=lib` overrides OpenSSL's own default, which is not simply `--prefix/lib`: for the `linux-x86_64` target, `Configure` assumes a multilib layout and picks `lib64` for the actual shared objects (visible in the build log as e.g. `-DENGINESDIR="\"/usr/lib64/engines-3\""`), the same convention a multilib glibc distro uses to keep 32-bit and 64-bit libraries apart. Vind Linux has no such split — section 7.1 installed musl itself straight into `/usr/lib` (`--syslibdir="$PREFIX/lib"`), and nothing in this guide ever creates a `/usr/lib64`. Left at its default, `make install` drops `libssl.so`/`libcrypto.so` into a `/usr/lib64` that nothing else uses or looks in, and every program linked against them — starting with the `openssl` binary itself — fails at startup with `Error loading shared library libssl.so.3: No such file or directory`, even though the file exists, just one directory over. `--libdir=lib` makes `Configure` install everything into `/usr/lib` instead, matching where musl's dynamic loader actually searches by default. (If a *later* rebuild of OpenSSL — by hand or through a `lambda` recipe — drops this flag, the same symptom comes back; see building-troubleshooting.md.)
 - `--openssldir=/etc/ssl` is separate from `--prefix`: `--prefix` is where the libraries, headers, and the `openssl` binary itself go (`/usr/lib`, `/usr/include`, `/usr/bin`), while `--openssldir` is where OpenSSL looks for its trust store by default — a cert file at `$OPENSSLDIR/cert.pem` and a hashed cert directory at `$OPENSSLDIR/certs`. Getting these mixed up (or omitting `--openssldir`, which defaults to something under `--prefix`) is a common cause of "TLS handshake succeeds but every certificate fails to verify."
 - `shared` builds `libssl.so`/`libcrypto.so`, matching the shared-by-default build of `zlib` above — `curl`/`wget` link against these dynamically rather than being statically bundled.
 
@@ -794,7 +800,7 @@ make
 make install
 ```
 
-`--with-openssl` links this `curl` against the `openssl` built just above, instead of curl's older default of building with no TLS backend at all — without a TLS backend, `curl`/`libcurl` don't merely "prefer HTTP," they have no code path for the `https://` scheme whatsoever, and reject it outright. `--with-ca-bundle=/etc/ssl/cert.pem` points this `curl` at the CA bundle installed alongside `openssl` above; without it, `curl` falls back to a compile-time guess about where the trust store lives that doesn't match this layout, and certificate verification fails even though the handshake itself works. `--without-libpsl` is needed even though nothing earlier in this guide installs `libpsl` and `pkg-config` isn't present either: most of curl's optional dependencies (brotli, zstd, LDAP, GSS-API, ...) degrade gracefully to "not found, feature disabled" when absent, but PSL (Public Suffix List, used for cookie-domain checks) is treated as on-by-default and its absence is a hard `configure: error: libpsl libs and/or directories were not found where specified!` unless explicitly disabled — this build doesn't need PSL support for anything.
+`--with-openssl` links this `curl` against the `openssl` built just above, instead of curl's older default of building with no TLS backend at all — without a TLS backend, `curl`/`libcurl` don't merely "prefer HTTP," they have no code path for the `https://` scheme whatsoever, and reject it outright. `--with-ca-bundle=/etc/ssl/cert.pem` points this `curl` at the CA bundle installed alongside `openssl` above; without it, `curl` falls back to a compile-time guess about where the trust store lives that doesn't match this layout, and certificate verification fails even though the handshake itself works. `--without-libpsl` is needed even though nothing earlier in this guide installs `libpsl` and `pkg-config` isn't present either: most of curl's optional dependencies (brotli, zstd, LDAP, GSS-API, ...) degrade gracefully to "not found, feature disabled" when absent, but PSL (Public Suffix List, used for cookie-domain checks) is treated as on-by-default and its absence is a hard `configure: error: libpsl libs and/or directories were not found where specified!` unless explicitly disabled — this build doesn't need PSL support for anything (see building-troubleshooting.md if `configure` still fails on this after adding the flag, or if `perl` can't be found despite being installed just above).
 
 `--disable-docs` and `--without-ca-embed` are no longer *forced* by a missing `perl` the way they would have been earlier in this guide — `perl` is already installed by this point (it's a dependency of `openssl`, built two steps above). They're kept here purely for minimalism: `--disable-docs` skips man pages and the built-in `--help` manual, which this bootstrap `curl` doesn't need; `--without-ca-embed` skips baking a copy of the CA bundle directly into the `curl` binary, since `--with-ca-bundle` above already points it at a CA file on disk, so an embedded copy would just be redundant weight. From here on, `curl` works inside the chroot for both plain HTTP and `https://`, so any package after this point can go back to the normal Download step from section 10.
 
@@ -830,7 +836,7 @@ make
 make install
 ```
 
-Same `openssl` as `curl` above, but detected differently: `wget`'s `configure` looks for OpenSSL via the `pkg-config` built just above (see that subsection for why `curl` doesn't need this same step) rather than a manual library probe. `wget` picks up OpenSSL's default trust store (`/etc/ssl/cert.pem`, set via `--openssldir` when `openssl` was built) automatically, so there's no separate `--with-ca-bundle`-equivalent flag to pass here the way there was for `curl`.
+Same `openssl` as `curl` above, but detected differently: `wget`'s `configure` looks for OpenSSL via the `pkg-config` built just above (see that subsection for why `curl` doesn't need this same step) rather than a manual library probe — see building-troubleshooting.md if `configure` still can't find it. `wget` picks up OpenSSL's default trust store (`/etc/ssl/cert.pem`, set via `--openssldir` when `openssl` was built) automatically, so there's no separate `--with-ca-bundle`-equivalent flag to pass here the way there was for `curl`.
 
 #### jq
 
@@ -881,7 +887,7 @@ make NO_GETTEXT=1 NO_TCLTK=1 install
 
 Git's own `INSTALL` doc recommends `make configure` (it generates `./configure` from `configure.ac`) over a plain autoconf-generated one — its `Makefile` already probes for available features via `uname` and doesn't need a full autoconf `configure` to work correctly. `--disable-nls` (plus `NO_GETTEXT=1` on the `make` line, since Git's `Makefile` checks for this independently of what `configure` decided) skips the `msgfmt`-built message catalogs entirely, which is what actually caused the `Error 127` — nothing in this guide builds `gettext`/`msgfmt` by default (see above if you'd rather build it instead of skipping translations). `--without-tcltk` (plus `NO_TCLTK=1`) skips `git-gui`/`gitk`, which need Tcl/Tk — also not built anywhere in this guide, and not needed for a minimal, script-driven bootstrap. Since `curl` was already built — with real TLS support — earlier in this same section, `configure` should auto-detect it and compile in `git-remote-https`, and that helper should actually be able to complete an `https://` handshake rather than just exist. Verify with `git clone https://github.com/VindLinux/lambda-manager /tmp/lambda-check` once installed (see building-troubleshooting.md if this fails with `Protocol "https" not supported` or with `remote helper 'https' aborted session` — they're different failures with different fixes).
 
-If `git`'s `make` fails with `fatal error: zlib.h: No such file or directory` even though `/usr/include/zlib.h` exists, the shell doesn't have the `CC`/`CFLAGS`/`CPPFLAGS`/`LDFLAGS` exports from section 9.3 — re-run those (or open a new chroot shell and redo section 9.3 in full) before retrying.
+If `git`'s `make` fails with `fatal error: zlib.h: No such file or directory`, or with `MSGFMT po/bg.msg` / `Error 127` — see building-troubleshooting.md, both are covered there.
 
 #### resolv.conf
 
@@ -1128,7 +1134,7 @@ lambda mutate append curl
 lambda reconcile
 ```
 
-If both of these succeed, Clang is genuinely doing the compiling from here on, not just sitting on disk unused.
+If both of these succeed, Clang is genuinely doing the compiling from here on, not just sitting on disk unused. Whatever recipe `lambda` used to rebuild `curl` here should still pass `--with-ca-bundle=/etc/ssl/cert.pem` the way the hand-built one in section 10.1 did — if it doesn't, `curl` silently falls back to autodetecting a CA path and TLS verification breaks in a way that's easy to miss (see building-troubleshooting.md).
 
 ### 12.5 Remove GCC
 
@@ -1231,9 +1237,7 @@ Then reconcile:
 lambda reconcile
 ```
 
-If a package fails to build, do not assume it is an actual problem immediately. Try running `lambda reconcile` again first.
-
-This can happen because some package dependencies are not fully tracked yet. As a result, a package may attempt to build before one of its required dependencies has been installed.
+If a package fails to build, retry `lambda reconcile` once before assuming something's actually wrong — some package dependencies aren't fully tracked yet, so a package can attempt to build before one of its own dependencies has been installed, and a second pass usually clears it. If it fails the same way twice in a row, or if the system boots afterward but a `util-linux`/`kmod`/`eudev` binary fails at runtime with a relocation or missing-library error, see building-troubleshooting.md.
 
 ## 14. System configuration
 
@@ -1535,7 +1539,7 @@ lambda mutate append vind-runit
 lambda reconcile
 ```
 
-`vind-runit` installs runit along with basic utilities and the default stage scripts required by Vind.
+`vind-runit` installs runit along with basic utilities and the default stage scripts required by Vind. If boot completes and `runit` starts but every `runsv` fails immediately with `unable to open supervise/lock: read-only file system`, see building-troubleshooting.md.
 
 #### 16.3.1 Wiring up networking and time sync
 

@@ -7,6 +7,18 @@ Companion to [building.md](building.md). Entries are indexed by the section numb
 **`make` was interrupted or a previous attempt failed partway through.**
 Run `rm -rf build` inside `musl-cross-make` before retrying `make -j$(nproc)`.
 
+**`make install` fails to download a source tarball with `502 Bad Gateway` (or a connection reset), and it isn't the IPv6 issue below.**
+`musl-cross-make` fetches GCC, binutils, and its other prerequisites from `https://ftpmirror.gnu.org`, a redirector that bounces each request to an essentially random GNU mirror — if it lands you on one that's temporarily down, that single request fails even though the rest of the internet is fine. Just retry `make install` a few times; it'll usually land on a different, working mirror.
+
+**You downloaded the missing tarball by hand from a working mirror and dropped it into `musl-cross-make/sources/`, but `make install` still insists on re-downloading it instead of using the file that's already there.**
+This isn't `make` failing to notice the file — it's comparing timestamps and deciding the file is stale. `musl-cross-make`'s download rule (`Makefile`) treats `sources/gcc-<version>.tar.xz` as out of date unless it's *newer* than `musl-cross-make`'s own `hashes/gcc-<version>.tar.xz.sha1` file. Plain `wget`, by default, sets a downloaded file's local timestamp to match the *server's* `Last-Modified` header — for a release tarball, that's whenever that version actually shipped (months or years ago), not the moment you downloaded it. So the tarball you just fetched can already look "older" than the hash file `musl-cross-make` compares it against, and `make` reruns the whole download recipe to be safe. Fix it by bumping the file's timestamp to now after moving it into place, instead of leaving `wget`'s server-provided one:
+```sh
+mv gcc-13.3.0.tar.xz sources/
+touch sources/gcc-13.3.0.tar.xz
+make install
+```
+This applies to any source `musl-cross-make` fetches this way, not just GCC — the same fix works for `binutils`, `musl`, `gmp`, `mpfr`, `mpc`, or `isl` if one of those hits the same symptom.
+
 **`make` fails downloading a source tarball (e.g. musl) with `Connection refused` or `Network is unreachable`, even though the host clearly has working internet.**
 Check `ip addr` / `ip route` / `ip -6 route`. If the host has an IPv6 address and default route configured *alongside* a working IPv4 one, the resolver may hand `wget` an IPv6 address first — and if that IPv6 setup isn't actually routable to the internet (e.g. it's a deprecated site-local `fec0::/64` address, or a route with no real path out, common on cloud/VM network setups), the download fails outright instead of falling back to IPv4, since plain `wget`/`curl` don't retry the other address family on their own.
 
@@ -327,13 +339,13 @@ curl -fL --retry 3 --retry-delay 2 -o zlib-<newer-version>.tar.gz \
     https://zlib.net/fossils/zlib-<newer-version>.tar.gz
 ```
 
-### Section 12 — `lambda` recipes installing libraries under `/usr/lib64` (Meson packages)
+### Section 13 — `lambda` recipes installing libraries under `/usr/lib64` (Meson packages)
 
 **Boot panics or hangs early with `dracut-lib.sh`/`ismounted` errors reporting exit code 127 from `findmnt`, even though `type ismounted` confirms the function exists.** Or, later in boot, `udevadm` (or another `eudev`/`kmod`-linked binary) fails with a wall of `Error relocating ...: symbol not found` plus `Error loading shared library libkmod.so.2: No such file or directory`.
 
 Root cause: Meson's `--libdir` auto-detection defaults to `lib64` on x86_64 by convention — a glibc/multilib assumption. musl's dynamic loader doesn't follow that convention; without an explicit search-path override it only looks in `/lib` and `/usr/lib`. Any package built with a bare `meson setup ... --prefix="$PREFIX"` (no `--libdir`) installs its `.so` files where the *binary* can't find them at runtime, even though the binary itself loads and links fine, and even though `<binary> --version` (which touches little of the library's code) can still work. This is why the failure shows up as a relocation/symbol error deep inside a real call (`findmnt /dev`, `udevadm` doing actual work) rather than at load time — it's PLT lazy binding resolving the missing symbol on first real use, not at exec.
 
-`util-linux` (`findmnt`) and `kmod` (`udevadm`'s `libkmod.so.2` dependency) are the two packages in section 12's base set confirmed to hit this. Fix each affected recipe by pinning `--libdir` explicitly instead of letting Meson guess:
+`util-linux` (`findmnt`) and `kmod` (`udevadm`'s `libkmod.so.2` dependency) are the two packages in section 13's base set confirmed to hit this. Fix each affected recipe by pinning `--libdir` explicitly instead of letting Meson guess:
 
 ```json
 "build": [
