@@ -179,7 +179,9 @@ make install
 
 This builds binutils, a bootstrap gcc, musl, then the final gcc linked against musl. If a previous attempt failed partway through, run `rm -rf build` before retrying.
 
-If `make install` fails to download a source tarball (`502 Bad Gateway`, connection reset, etc.), or keeps re-downloading one you already fetched by hand — see building-troubleshooting.md.
+If `make` or `make install` fails to download a source tarball (`502 Bad Gateway`, connection reset, etc.), or keeps re-downloading one you already fetched by hand — see [building-troubleshooting.md](building-troubleshooting.md).
+
+Should you see a wall of undefined reference to ... errors from ld while building GCC (Pass 1 or later), spread across several seemingly unrelated .o files, this is almost always a parallel build race condition, not a source or configuration bug. See the specific solution in [building-troubleshooting.md](building-troubleshooting.md) before chasing the problem elsewhere.
 
 Put it on your `PATH`:
 
