@@ -561,8 +561,12 @@ CC="$TOOLS/bin/x86_64-pc-linux-musl-gcc" \
     --disable-libsanitizer
 
 make $MAKEOPTS
+
+touch /tmp/gcc-pass2-marker
 make DESTDIR="$DESTDIR" install
 ```
+
+`/tmp/gcc-pass2-marker` is a plain timestamp file, created on the host right before `make install` writes anything into `$VIND`. It has no purpose yet on its own — section 8.1 below uses it to work out exactly which files this install touched.
 
 - `/usr/bin/gcc -dumpmachine` (absolute path) gives the real host triple without going through `config.guess`, which is unreliable here since the shell environment is deliberately biased toward the cross-compiler.
 - `CC_FOR_BUILD=/usr/bin/gcc` makes sure the build-time tools (which run *now*, on the live ISO) use the host's native compiler — only the final target compiler uses the musl cross-compiler.
@@ -583,6 +587,28 @@ A lot of build systems (`configure` scripts especially) look for a compiler name
 ln -sf gcc "$VIND/usr/bin/cc"
 ln -sf g++ "$VIND/usr/bin/c++"
 ```
+
+### 8.1 Recording a manifest for later removal
+
+The whole reason Pass 2 GCC gets built at all is to bootstrap LLVM/Clang (section 12) — nothing in the final system is meant to depend on it afterward (section 12.5 removes it). Since this GCC was installed by hand, outside `lambda` entirely, there's no package manifest anywhere tracking which files belong to it. Build one now, while `/tmp/gcc-pass2-marker` (created just before `make install` above) still marks the exact instant this install started writing into `$VIND`:
+
+```sh
+mkdir -p "$VIND/var/log"
+
+find "$DESTDIR" \( -type f -o -type l \) -newer /tmp/gcc-pass2-marker \
+    | sed "s|^$DESTDIR||" \
+    > "$VIND/var/log/gcc-pass2.manifest"
+
+echo /usr/bin/cc  >> "$VIND/var/log/gcc-pass2.manifest"
+echo /usr/bin/c++ >> "$VIND/var/log/gcc-pass2.manifest"
+```
+
+- `find -newer /tmp/gcc-pass2-marker` catches every file GCC's own `make install` wrote, without needing GCC's build system to cooperate or print anything — it's a before/after snapshot, not something parsed out of build output.
+- The `sed` strips the `$DESTDIR` (i.e. `$VIND`) prefix from each path, so the manifest stores paths the way they'll actually be seen once you're inside the chroot (`/usr/bin/gcc`, not `/mnt/vind/usr/bin/gcc`).
+- The `cc`/`c++` symlinks created just above are already covered by running `find` after them, since `-newer` catches symlinks too — the two `echo` lines are there anyway, so the manifest stays correct even if a future edit moves the symlink step around.
+- The manifest lives at `$VIND/var/log/gcc-pass2.manifest`, which is just `/var/log/gcc-pass2.manifest` once you `chroot` in — section 12.5 reads it from there to remove GCC without routing it through `lambda` at all.
+
+This is deliberately a plain file list, not a `lambda` package: GCC is a bootstrap tool this guide needs *once*, not a package Vind Linux ships, so it doesn't need `lambda`'s dependency tracking, versioning, or upgrade path — just a reliable way to know what to delete.
 
 ---
 
@@ -1037,9 +1063,9 @@ Not needed for anything in this guide (we're already native inside the chroot by
 
 ## 12. Bootstrapping Clang/LLVM
 
-An earlier pass of this guide built the entire base system first (the full package list now in section 13) under GCC, and only switched to Clang afterward. That ordering has a real problem: everything installed under GCC links against `libstdc++`, and switching `make.conf` to Clang afterward doesn't retroactively relink anything already on disk — it only affects packages built *after* the switch. Any C++ package caught on the wrong side of that line stays permanently mismatched with the rest of the system's `libc++`/`libc++abi` ABI (different exception-unwinding mechanism, different internal layouts for types like `std::string`), silently, until something actually tries to link across that boundary. Rather than document that as a known footgun, this section moves Clang's bootstrap ahead of the base system entirely: the only thing built under GCC is GCC's own manifest entry and LLVM itself, and everything from section 13 onward is compiled with Clang from its very first build. Nothing gets built twice, and nothing ends up on the wrong side of an ABI line.
+An earlier pass of this guide built the entire base system first (the full package list now in section 13) under GCC, and only switched to Clang afterward. That ordering has a real problem: everything installed under GCC links against `libstdc++`, and switching `make.conf` to Clang afterward doesn't retroactively relink anything already on disk — it only affects packages built *after* the switch. Any C++ package caught on the wrong side of that line stays permanently mismatched with the rest of the system's `libc++`/`libc++abi` ABI (different exception-unwinding mechanism, different internal layouts for types like `std::string`), silently, until something actually tries to link across that boundary. Rather than document that as a known footgun, this section moves Clang's bootstrap ahead of the base system entirely: the only thing built under GCC is LLVM itself, and everything from section 13 onward is compiled with Clang from its very first build. Nothing gets built twice, and nothing ends up on the wrong side of an ABI line.
 
-### 12.1 Adopt GCC into lambda's manifest and build LLVM/Clang
+### 12.1 Build LLVM/Clang under the Pass 2 GCC
 
 Replace `/etc/lambda/system.json` with a minimal list — just enough to get Clang onto disk, not the rest of the system yet:
 
@@ -1047,7 +1073,6 @@ Replace `/etc/lambda/system.json` with a minimal list — just enough to get Cla
 cat > /etc/lambda/system.json <<'EOF'
 {
   "packages": [
-    "gcc",
     "llvm"
   ]
 }
@@ -1056,15 +1081,15 @@ EOF
 lambda reconcile
 ```
 
-`gcc` is included for the same reason it would be later regardless: the Pass 2 compiler on disk (section 8) was installed by hand, outside `lambda` entirely, so as far as `lambda`'s manifest is concerned GCC doesn't exist yet — there's nothing in there for `lambda` to ever cleanly remove. Listing it here has `lambda` build and install its own tracked copy (using the section 8 compiler to do it), which brings GCC under manifest management long enough to purge it cleanly in 12.5.
+GCC is deliberately **not** in this list. The Pass 2 compiler on disk (section 8) was installed by hand, outside `lambda` entirely — bringing it into the manifest here would mean `lambda` builds and installs a second, separately-tracked copy of GCC just so there's something for it to purge later, redoing a slow C/C++ bootstrap build for a compiler this guide already has, and needs only long enough to build one thing. Section 8.1 covers this instead: it already recorded, by hand, exactly which files the Pass 2 install wrote into `$VIND`. Section 12.5 removes GCC by deleting those files directly, and doesn't need `lambda` to have ever heard of it.
 
-`llvm` has to be built under GCC — there's no way around that chicken-and-egg step. LLVM's own build system needs a working C++ compiler to compile itself, and the only one that exists anywhere in the system at this point is the Pass 2 GCC. This is also why the list above is so short: LLVM is the *only* real package this guide needs GCC for. Everything else — all thirty-some packages in section 13 — has no such requirement and gains nothing from being built before Clang exists.
+`llvm` has to be built under GCC — there's no way around that chicken-and-egg step. LLVM's own build system needs a working C++ compiler to compile itself, and the only one that exists anywhere in the system at this point is the Pass 2 GCC, sitting on disk at `/usr/bin/gcc` (or reached via the `cc`/`c++` symlinks) — `lambda`'s `llvm` recipe finds it there and uses it the same way it would use any other compiler on `$PATH`, whether or not GCC itself is in `system.json`. This is also why the list above is so short: LLVM is the *only* real package this guide needs GCC for. Everything else — all thirty-some packages in section 13 — has no such requirement and gains nothing from being built before Clang exists.
 
 This step is still going to take a while (LLVM is a large codebase), but it's a small fraction of the time section 13's full reconcile takes, and unlike the old ordering, none of this work gets redone later.
 
 ### 12.2 Switch the build environment to Clang
 
-`lambda`'s default `make.conf` template assumes Clang (`CC=clang`, `CXX=clang++`); section 11.2 overrode it to GCC so 12.1's `gcc`/`llvm` build had a known-good, already-native compiler to work with. Now that Clang exists, switch back:
+`lambda`'s default `make.conf` template assumes Clang (`CC=clang`, `CXX=clang++`); section 11.2 overrode it to GCC so 12.1's `llvm` build had a known-good, already-native compiler to work with. Now that Clang exists, switch back:
 
 ```sh
 cat > /etc/lambda/make.conf <<'EOF'
@@ -1140,14 +1165,16 @@ If both of these succeed, Clang is genuinely doing the compiling from here on, n
 
 ### 12.5 Remove GCC
 
-With Clang confirmed working, GCC has done its job: it built musl, itself (twice, in Phase 1), and LLVM/Clang. Nothing else in Vind Linux is meant to depend on it — and because section 13's base system hasn't been touched yet, removing GCC now means nothing installed from this point forward was ever built with it. Remove it from the manifest:
+With Clang confirmed working, GCC has done its job: it built musl, itself (twice, in Phase 1), and LLVM/Clang. Nothing else in Vind Linux is meant to depend on it — and because section 13's base system hasn't been touched yet, removing GCC now means nothing installed from this point forward was ever built with it. GCC was never in `lambda`'s manifest (section 12.1), so there's nothing to `purge` — instead, delete exactly the files section 8.1 recorded:
 
 ```sh
-lambda mutate purge gcc
-lambda reconcile
+xargs -a /var/log/gcc-pass2.manifest rm -f
+rm -f /var/log/gcc-pass2.manifest
 ```
 
-Confirm it's actually gone, not just dropped from `system.json`:
+`xargs -a` reads the manifest one path per line and hands each to `rm -f`, which is quiet about paths that don't exist — harmless here, but worth knowing if the manifest ever ends up stale (a re-run of section 8 without regenerating it, for instance). Deleting the manifest file afterward isn't required for anything later in this guide, but there's no reason to leave a list of already-deleted paths lying around either.
+
+Confirm it's actually gone:
 
 ```sh
 which gcc      # should print nothing
@@ -1155,13 +1182,13 @@ gcc --version  # should fail: command not found
 clang --version
 ```
 
-From this point on, Clang/LLVM is the only compiler in Vind Linux's final system state — `gcc` will not appear in `system.json`, on disk, or in `lambda`'s manifest again unless deliberately reinstalled. If a specific package in section 13 turns out to genuinely need GCC (a GNU extension Clang doesn't accept, for instance), `lambda mutate append gcc` brings it back temporarily for that one build; purge it again afterward rather than leaving it installed indefinitely, or the whole point of this section is undone.
+From this point on, Clang/LLVM is the only compiler in Vind Linux's final system state — `gcc` will not appear in `system.json`, on disk, or in `lambda`'s manifest again unless deliberately reinstalled. If a specific package in section 13 turns out to genuinely need GCC (a GNU extension Clang doesn't accept, for instance), rebuilding it the way section 8 did and repeating this removal afterward is the only path back — there's no `lambda mutate append gcc` shortcut anymore, since GCC was never a `lambda` package to begin with.
 
 ## 13. Installing the base system
 
-With Clang in place and GCC gone, the rest of the base system installs through `lambda` the same way `gcc`/`llvm`/`libc++`/`libc++abi` just did — except this time every package in the list below compiles against `libc++`/`libc++abi` from its very first build, not as a later rebuild. That's the entire payoff of doing section 12 first: this reconcile only needs to happen once.
+With Clang in place and GCC gone, the rest of the base system installs through `lambda` the same way `llvm`/`libc++`/`libc++abi`/`curl` just did — except this time every package in the list below compiles against `libc++`/`libc++abi` from its very first build, not as a later rebuild. That's the entire payoff of doing section 12 first: this reconcile only needs to happen once.
 
-Replace `/etc/lambda/system.json` with the full base package set below, then reconcile. This is going to take a long time — `lambda reconcile` resolves and builds this entire list from source. `llvm`, `libc++`, `libc++abi`, and `curl` are already installed from section 12 and stay listed here since `system.json` describes the system's whole desired state, not just what's new; leaving them out would tell `lambda` to remove them. `gcc` is deliberately *not* in this list — section 12.5 already purged it, and it should stay that way.
+Replace `/etc/lambda/system.json` with the full base package set below, then reconcile. This is going to take a long time — `lambda reconcile` resolves and builds this entire list from source. `llvm`, `libc++`, `libc++abi`, and `curl` are already installed from section 12 and stay listed here since `system.json` describes the system's whole desired state, not just what's new; leaving them out would tell `lambda` to remove them. `gcc` is deliberately *not* in this list — it was never a `lambda` package to begin with (section 12.1), section 12.5 already deleted it from disk, and it should stay that way.
 
 `bash`, `coreutils`, `gzip`, `grep`, `sed`, and `tzdata` are included for the same reason discussed in section 11.5: the recipe convention of treating those first five as an already-guaranteed bootstrap toolchain only becomes true once they're actually installed, and this is where that happens. Once `lambda reconcile` finishes, real GNU `bash` replaces `dash`/`ash` as the interactive shell and `/bin/sh` (update `/etc/passwd`'s shell field and the `EOF`-terminated `#!/bin/sh` assumption in `/etc/profile` if you want `bash` as the default rather than just available), and GNU `coreutils`/`gzip`/`grep`/`sed` shadow the Busybox applets of the same name earlier in `$PATH`. `tzdata` provides the `/usr/share/zoneinfo` database that section 14.5 (timezone) and any package doing real date/time handling need — nothing before this point in the guide installs it, and musl's own C library has no bundled zoneinfo data the way some libc's do.
 
@@ -1400,6 +1427,70 @@ cat > /etc/shells << 'EOF'
 EOF
 ```
 
+### 14.7 /etc/os-release and GRUB defaults
+
+`/etc/os-release` is how everything from `neofetch` to `systemd`-derived tooling to a package's own `configure` script identifies which distribution it's running on — without it, this is just "some Linux system" as far as any of that tooling can tell:
+
+```sh
+cat > /etc/os-release << 'EOF'
+NAME="Vind Linux"
+ID=vind
+PRETTY_NAME="Vind Linux"
+VERSION="1.0"
+VERSION_ID="1.0"
+HOME_URL="https://github.com/VindLinux"
+EOF
+```
+
+`grub` (installed in section 13) reads `/etc/default/grub` when `grub-mkconfig` (section 16.4) generates the actual boot menu. Creating it here, rather than waiting until section 16.4, keeps every plain-text system-identity file next to the others this chapter already writes:
+
+```sh
+cat > /etc/default/grub << 'EOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="Vind Linux"
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX=""
+EOF
+```
+
+`GRUB_DISTRIBUTOR` is what `grub-mkconfig` uses to label the menu entries it generates ("Vind Linux" instead of a generic "GNU/Linux"); the other four are GRUB's own usual baseline (a 5-second menu timeout, no extra kernel command-line arguments) rather than anything Vind-specific. Section 16.4 only needs to run `grub-install`/`grub-mkconfig` against this file — it doesn't need to create or append to it itself.
+
+### 14.8 Cleaning up and stripping the system
+
+Everything the base system needs is now installed (section 13) and configured (this chapter, so far). Two things are still sitting on disk that don't need to be: leftover build material from every section since Phase 1, and full debug symbols in every binary and shared library the system just spent this whole guide compiling.
+
+**Temporary and build files.** `$VIND/sources` (section 7 onward) held every tarball this guide downloaded and every directory it was extracted and built in — none of that is needed once `make install` has already copied the result into `/usr`. `$VIND/tools` and `$VIND/tools-src` (section 6) are the Pass 1 cross-toolchain and its build tree; Phase 1 already noted these could be deleted once Phase 2 started, and nothing since then has touched them. Since all three live inside `$VIND`, they appear as ordinary top-level directories once you're inside the chroot:
+
+```sh
+rm -rf /sources
+rm -rf /tools /tools-src
+rm -rf /tmp/*
+```
+
+Leave `/var/tmp` alone — `chmod 1777` was set on it back in section 5 specifically so ordinary programs can use it at runtime; it's meant to stay, unlike the build-only directories above.
+
+**Stripping.** Every binary and shared library built by hand or through `lambda` up to this point carries full compiler debug info by default — useful while something's still being debugged, dead weight in a finished system. `strip`, cross-built into `$VIND` as part of section 7.6's native binutils, is already on `$PATH` inside the chroot:
+
+```sh
+find /usr/lib -type f -name '*.so*' \
+    -exec strip --strip-unneeded '{}' \; 2>/dev/null
+
+find /usr/lib -type f -name '*.a' \
+    -exec strip --strip-debug '{}' \; 2>/dev/null
+
+find /usr/bin /usr/sbin -type f \
+    -exec strip --strip-all '{}' \; 2>/dev/null
+```
+
+The three passes use different strip levels on purpose:
+
+- Shared libraries (`--strip-unneeded`) keep the dynamic symbol table `ld.so` needs to resolve them at runtime — stripping everything would leave the `.so` on disk but unusable the next time something tries to link or load it.
+- Static libraries (`--strip-debug`) keep their full local/global symbol tables — a `.a` is only ever consumed by a later `ld` invocation that still needs those symbols to resolve references into it, so `--strip-all` here would silently break every future link against it.
+- Plain executables (`--strip-all`) have no such downstream consumer; nothing links against a finished binary, so there's nothing to preserve.
+
+`2>/dev/null` on each pass quiets `strip`'s complaints about the odd non-ELF file `find`'s name pattern still lets through (a shell script matching `*.so*` by coincidence, for instance) — `strip` refusing a file it can't handle isn't a failure worth stopping the pass for.
+
 ## 15. Networking
 
 `/etc/resolv.conf` (below) is the only piece of networking this guide has actually needed so far — it's what let `git`/`curl` inside the chroot resolve hostnames at all back in section 10.1. It says nothing about how an interface gets an address in the first place, which matters once you're booting on real hardware (or a VM) instead of relying on whatever the live ISO's own network setup left behind. This section covers that: bringing an interface up automatically, keeping the clock correct enough for TLS to keep working after reboot, and where firewalling would fit if you need it. The actual "start this at boot" wiring depends on `runit` (installed in section 16.3, right after this), so the pieces below are configuration only — section 16.3 comes back and turns them into running services once there's an init system to hand them to.
@@ -1584,15 +1675,7 @@ The trailing `sleep` isn't decorative — a `run` script that exits immediately 
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=VindLinux --removable
 ```
 
-Before making the config, set the distributor.
-
-```sh
-cat >> /etc/default/grub << 'EOF'
-GRUB_DISTRIBUTOR="Vind Linux"
-EOF
-```
-
-Then:
+`/etc/default/grub` — including `GRUB_DISTRIBUTOR` — was already created back in section 14.7; `grub-mkconfig` picks it up automatically, so no further edits are needed here before generating the config:
 
 ```sh
 grub-mkconfig -o /boot/grub/grub.cfg
