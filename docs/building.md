@@ -1131,10 +1131,11 @@ clang --version
 
 ### 12.3 Build the C++ runtime with Clang: libc++ and libc++abi
 
-GCC's C++ runtime (`libstdc++`) and Clang's (`libc++`) aren't interchangeable at the ABI level, so a Clang-based system needs its own. Build and install them through `lambda`, now that `make.conf` points at Clang — `lambda mutate append` both builds them and adds them to `system.json`, so they stay tracked going forward:
+GCC's C++ runtime (`libstdc++`) and Clang's (`libc++`) aren't interchangeable at the ABI level, so a Clang-based system needs its own. Build and install them through `lambda`, now that `make.conf` points at Clang — `lambda mutate append` adds they to `system.json` and `lambda reconcile` install them so they stay tracked going forward:
 
 ```sh
 lambda mutate append libc++ libc++abi
+lambda reconcile
 ```
 
 ### 12.4 Verify Clang can build packages on its own
