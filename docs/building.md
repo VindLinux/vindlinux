@@ -347,6 +347,15 @@ for cmd in $(./busybox --list); do
 done
 ```
 
+Verify:
+
+```sh
+file "$VIND/usr/bin/busybox"
+"$VIND/usr/bin/busybox" | head -1
+```
+
+`file` should show the same static/musl signature as the other Phase 1 packages — never a glibc interpreter. Running the binary directly should print its version banner; since it's built static (`CONFIG_STATIC=y`), this works even before `chroot`.
+
 ### 7.3 dash
 
 Small, fast POSIX-compliant shell derived from ash. Used as a lightweight `/bin/sh`.
@@ -429,6 +438,8 @@ Verify the bootstrap installation — with a real `.l` file, not just `--version
 printf '%%%%\n.    ECHO;\n%%%%\n' > /tmp/min.l
 "$VIND$PREFIX/bin/flex" -o /tmp/min.c /tmp/min.l && echo OK
 ```
+
+What this check is actually looking for is the absence of a **segfault**, not a guaranteed `OK`. This binary was cross-compiled against musl but is being invoked here on the glibc host, so whether the last command prints `OK` or exits with an error is host-dependent — either outcome is fine. A segfault is not: that's the specific failure this check exists to catch, and it's the one outcome that means the `ac_cv_func_*` overrides above weren't actually applied.
 
 If this still segfaults, check `config.h` in the build tree for `#define malloc rpl_malloc` — its presence means the `ac_cv_func_*` overrides above weren't picked up (a stale `config.cache` from an earlier attempt is the usual cause; `rm -f config.cache` and reconfigure).
 
@@ -832,6 +843,15 @@ make install
 
 `--disable-docs` and `--without-ca-embed` are no longer *forced* by a missing `perl` the way they would have been earlier in this guide — `perl` is already installed by this point (it's a dependency of `openssl`, built two steps above). They're kept here purely for minimalism: `--disable-docs` skips man pages and the built-in `--help` manual, which this bootstrap `curl` doesn't need; `--without-ca-embed` skips baking a copy of the CA bundle directly into the `curl` binary, since `--with-ca-bundle` above already points it at a CA file on disk, so an embedded copy would just be redundant weight. From here on, `curl` works inside the chroot for both plain HTTP and `https://`, so any package after this point can go back to the normal Download step from section 10.
 
+Verify:
+
+```sh
+curl --version
+curl -sI https://github.com
+```
+
+The first line confirms `curl` reports an `OpenSSL` (not `none`/no-TLS) build; the second is the actual proof it works, since it's a real `https://` handshake against a live server rather than just a linked-library check.
+
 #### pkg-config
 
 Needed only so `wget`'s `configure` (next) can find the `openssl` built above — nothing else in this bootstrap batch calls `pkg-config` directly, and `curl`'s own `configure` above didn't need it.
@@ -866,6 +886,14 @@ make install
 
 Same `openssl` as `curl` above, but detected differently: `wget`'s `configure` looks for OpenSSL via the `pkg-config` built just above (see that subsection for why `curl` doesn't need this same step) rather than a manual library probe — see building-troubleshooting.md if `configure` still can't find it. `wget` picks up OpenSSL's default trust store (`/etc/ssl/cert.pem`, set via `--openssldir` when `openssl` was built) automatically, so there's no separate `--with-ca-bundle`-equivalent flag to pass here the way there was for `curl`.
 
+Verify:
+
+```sh
+wget --version
+```
+
+Should report `+https` in its feature list — if it shows `-https` instead, `pkg-config` didn't actually find `openssl` at configure time even though it built without error; see building-troubleshooting.md.
+
 #### jq
 
 ```sh
@@ -895,6 +923,12 @@ make install
 ```
 
 `--disable-shared` keeps this to a static build — nothing else in this minimal bootstrap links against `libgettextlib`/`libgettextpo` dynamically, and it avoids adding another `.so` to track before `lambda` exists to manage it. If you don't need `msgfmt` for anything beyond Git, skip this package entirely and use `--disable-nls` in Git's `configure` instead (see below) — that's the path this guide follows by default, to keep this batch of hand-built prerequisites as small as possible.
+
+If you did build it, verify:
+
+```sh
+msgfmt --version
+```
 
 #### git
 
@@ -1073,7 +1107,8 @@ Replace `/etc/lambda/system.json` with a minimal list — just enough to get Cla
 cat > /etc/lambda/system.json <<'EOF'
 {
   "packages": [
-    "llvm"
+    "llvm",
+    "clang-config"
   ]
 }
 EOF
@@ -1191,15 +1226,16 @@ With Clang in place and GCC gone, the rest of the base system installs through `
 
 Replace `/etc/lambda/system.json` with the full base package set below, then reconcile. This is going to take a long time — `lambda reconcile` resolves and builds this entire list from source. `llvm`, `libc++`, `libc++abi`, and `curl` are already installed from section 12 and stay listed here since `system.json` describes the system's whole desired state, not just what's new; leaving them out would tell `lambda` to remove them. `gcc` is deliberately *not* in this list — it was never a `lambda` package to begin with (section 12.1), section 12.5 already deleted it from disk, and it should stay that way.
 
-`bash`, `coreutils`, `gzip`, `grep`, `sed`, and `tzdata` are included for the same reason discussed in section 11.5: the recipe convention of treating those first five as an already-guaranteed bootstrap toolchain only becomes true once they're actually installed, and this is where that happens. Once `lambda reconcile` finishes, real GNU `bash` replaces `dash`/`ash` as the interactive shell and `/bin/sh` (update `/etc/passwd`'s shell field and the `EOF`-terminated `#!/bin/sh` assumption in `/etc/profile` if you want `bash` as the default rather than just available), and GNU `coreutils`/`gzip`/`grep`/`sed` shadow the Busybox applets of the same name earlier in `$PATH`. `tzdata` provides the `/usr/share/zoneinfo` database that section 14.5 (timezone) and any package doing real date/time handling need — nothing before this point in the guide installs it, and musl's own C library has no bundled zoneinfo data the way some libc's do.
+`bash`, `gzip`, `grep`, `sed`, and `tzdata` are included for the same reason discussed in section 11.5: the recipe convention of treating those first five as an already-guaranteed bootstrap toolchain only becomes true once they're actually installed, and this is where that happens. Once `lambda reconcile` finishes, real GNU `bash` replaces `dash`/`ash` as the interactive shell and `/bin/sh` (update `/etc/passwd`'s shell field and the `EOF`-terminated `#!/bin/sh` assumption in `/etc/profile` if you want `bash` as the default rather than just available), and GNU `gzip`/`grep`/`sed` shadow the Busybox applets of the same name earlier in `$PATH`. `tzdata` provides the `/usr/share/zoneinfo` database that section 14.5 (timezone) and any package doing real date/time handling need — nothing before this point in the guide installs it, and musl's own C library has no bundled zoneinfo data the way some libc's do.
 
 ```sh
 cat > /etc/lambda/system.json <<'EOF'
 {
   "packages": [
     "busybox",
-    "diffutils",
+    "ln",
     "realpath",
+    "diffutils",
     "libnl",
     "pkgconf",
     "libc++",
@@ -1227,7 +1263,6 @@ cat > /etc/lambda/system.json <<'EOF'
     "make",
     "libpsl",
     "argp-standalone",
-    "ln",
     "perl",
     "kbd",
     "dracut",
@@ -1251,10 +1286,7 @@ cat > /etc/lambda/system.json <<'EOF'
     "dbus",
     "util-linux",
     "bash",
-    "coreutils",
     "gzip",
-    "grep",
-    "sed",
     "tzdata"
   ]
 }
@@ -1266,6 +1298,8 @@ Then reconcile:
 ```sh
 lambda reconcile
 ```
+
+Run `lambda reconcile` until it converges — i.e. until it reports nothing left to do, rather than treating a single pass as the finished step. On this particular reconcile, expect to need it **twice**: the first pass mostly ends up removing packages that don't belong in this manifest (leftovers from sections 11–12's smaller `system.json` files), and it's only the second pass that actually fetches and builds the full list above.
 
 If a package fails to build, retry `lambda reconcile` once before assuming something's actually wrong — some package dependencies aren't fully tracked yet, so a package can attempt to build before one of its own dependencies has been installed, and a second pass usually clears it. If it fails the same way twice in a row, or if the system boots afterward but a `util-linux`/`kmod`/`eudev` binary fails at runtime with a relocation or missing-library error, see building-troubleshooting.md.
 
@@ -1446,6 +1480,8 @@ EOF
 `grub` (installed in section 13) reads `/etc/default/grub` when `grub-mkconfig` (section 16.4) generates the actual boot menu. Creating it here, rather than waiting until section 16.4, keeps every plain-text system-identity file next to the others this chapter already writes:
 
 ```sh
+mkdir -p /etc/default
+
 cat > /etc/default/grub << 'EOF'
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
@@ -1457,40 +1493,20 @@ EOF
 
 `GRUB_DISTRIBUTOR` is what `grub-mkconfig` uses to label the menu entries it generates ("Vind Linux" instead of a generic "GNU/Linux"); the other four are GRUB's own usual baseline (a 5-second menu timeout, no extra kernel command-line arguments) rather than anything Vind-specific. Section 16.4 only needs to run `grub-install`/`grub-mkconfig` against this file — it doesn't need to create or append to it itself.
 
-### 14.8 Cleaning up and stripping the system
+### 14.8 Cleaning up the system
 
-Everything the base system needs is now installed (section 13) and configured (this chapter, so far). Two things are still sitting on disk that don't need to be: leftover build material from every section since Phase 1, and full debug symbols in every binary and shared library the system just spent this whole guide compiling.
+Everything the base system needs is now installed (section 13) and configured (this chapter, so far). One thing is still sitting on disk that doesn't need to be: leftover build material from every section since Phase 1.
 
-**Temporary and build files.** `$VIND/sources` (section 7 onward) held every tarball this guide downloaded and every directory it was extracted and built in — none of that is needed once `make install` has already copied the result into `/usr`. `$VIND/tools` and `$VIND/tools-src` (section 6) are the Pass 1 cross-toolchain and its build tree; Phase 1 already noted these could be deleted once Phase 2 started, and nothing since then has touched them. Since all three live inside `$VIND`, they appear as ordinary top-level directories once you're inside the chroot:
+**Temporary and build files.** `$VIND/sources` (section 7 onward) held every tarball this guide downloaded and every directory it was extracted and built in — none of that is needed once `make install` has already copied the result into `/usr`. `$VIND/tools` and `$VIND/tools-src` (section 6) are the Pass 1 cross-toolchain and its build tree; Phase 1 already noted these could be deleted once Phase 2 started, and nothing since then has touched them. `/usr/src` held the kernel and other source trees fetched from section 9.1 onward and is no longer needed by anything built so far (see section 16.2 for the separate note about the kernel source tree specifically, which is worth keeping around a little longer). Since all of these live inside `$VIND`, they appear as ordinary top-level directories once you're inside the chroot:
 
 ```sh
 rm -rf /sources
 rm -rf /tools /tools-src
+rm -rf /usr/src
 rm -rf /tmp/*
 ```
 
 Leave `/var/tmp` alone — `chmod 1777` was set on it back in section 5 specifically so ordinary programs can use it at runtime; it's meant to stay, unlike the build-only directories above.
-
-**Stripping.** Every binary and shared library built by hand or through `lambda` up to this point carries full compiler debug info by default — useful while something's still being debugged, dead weight in a finished system. `strip`, cross-built into `$VIND` as part of section 7.6's native binutils, is already on `$PATH` inside the chroot:
-
-```sh
-find /usr/lib -type f -name '*.so*' \
-    -exec strip --strip-unneeded '{}' \; 2>/dev/null
-
-find /usr/lib -type f -name '*.a' \
-    -exec strip --strip-debug '{}' \; 2>/dev/null
-
-find /usr/bin /usr/sbin -type f \
-    -exec strip --strip-all '{}' \; 2>/dev/null
-```
-
-The three passes use different strip levels on purpose:
-
-- Shared libraries (`--strip-unneeded`) keep the dynamic symbol table `ld.so` needs to resolve them at runtime — stripping everything would leave the `.so` on disk but unusable the next time something tries to link or load it.
-- Static libraries (`--strip-debug`) keep their full local/global symbol tables — a `.a` is only ever consumed by a later `ld` invocation that still needs those symbols to resolve references into it, so `--strip-all` here would silently break every future link against it.
-- Plain executables (`--strip-all`) have no such downstream consumer; nothing links against a finished binary, so there's nothing to preserve.
-
-`2>/dev/null` on each pass quiets `strip`'s complaints about the odd non-ELF file `find`'s name pattern still lets through (a shell script matching `*.so*` by coincidence, for instance) — `strip` refusing a file it can't handle isn't a failure worth stopping the pass for.
 
 ## 15. Networking
 
@@ -1617,6 +1633,8 @@ echo 'omit_dracutmodules+=" i18n "' > /etc/dracut.conf.d/no-i18n.conf
 ```
 
 With these in place, `dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>` should complete successfully.
+
+**Kernel source tree (optional cleanup).** The `vind-kernel` checkout itself can be deleted once the kernel and modules are installed — nothing later in this guide needs it on disk. It's worth holding off on that, though: it's recommended to only delete it *after* confirming the system actually boots, since keeping the source around until then means that if boot fails or something needs a config tweak, you can still recompile without re-cloning and reconfiguring from scratch.
 
 **CPU microcode (optional, real hardware only).** Skip this on a VM — the hypervisor's own vCPU presentation doesn't need or use it. On real hardware, the kernel can load a CPU microcode update very early in boot (before most of the kernel itself has initialized) to patch certain silicon-level bugs and security issues that a BIOS/UEFI update alone doesn't always cover. This isn't packaged anywhere in this guide's `lambda` recipes yet — Intel and AMD each publish their own microcode bundles (`intel-ucode`/`linux-firmware`'s AMD equivalent), and getting one installed and picked up by `dracut`'s early-microcode mechanism is a real gap in Vind Linux's current package set, not something worked around here. If this matters for your hardware, it's worth writing a `lambda` recipe for it before relying on this build long-term.
 
