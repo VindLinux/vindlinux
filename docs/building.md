@@ -491,6 +491,8 @@ BUILD_TRIPLE=$(/usr/bin/gcc -dumpmachine)
 ./configure --prefix="$PREFIX" --host="$HOST" --build="$BUILD_TRIPLE" \
     --disable-multilib --disable-nls --disable-gprofng
 make $MAKEOPTS
+
+touch /tmp/binutils-marker
 make DESTDIR="$DESTDIR" install
 ```
 
@@ -507,6 +509,22 @@ file "$VIND/usr/bin/as" "$VIND/usr/bin/ld"
 Both should show `ld-musl-x86_64.so.1`, not glibc — and definitely not the host's binutils under `$TOOLS`.
 
 This has to be done before entering the chroot (section 9) — without it, `gcc` inside the chroot can produce assembly but has nothing to turn it into an actual object file, which is exactly the `cannot execute 'as'` error you get if this step is skipped. See building-troubleshooting.md if `configure` fails partway through a subdirectory despite `--build` being set explicitly above, or if you're already inside the chroot when you discover this step was skipped.
+
+#### 7.6.1 Recording a manifest for later removal
+
+Like the Pass 2 GCC in section 8, this `binutils` was installed by hand, outside `lambda` entirely, so there's no package manifest tracking which files belong to it. Once Clang/LLD provide their own equivalents for `as`/`ld`/`ar`/`nm`/`ranlib`/`strip` and are confirmed working, this native GNU `binutils` can be removed the same way section 12.5 removes GCC — by deleting exactly the files this install wrote, not by asking `lambda` to `purge` a package it never installed. Build that file list now, while `/tmp/binutils-marker` (created just before `make install` above) still marks the exact instant this install started writing into `$VIND`:
+
+```sh
+mkdir -p "$VIND/var/log"
+
+find "$DESTDIR" \( -type f -o -type l \) -newer /tmp/binutils-marker \
+    | sed "s|^$DESTDIR||" \
+    > "$VIND/var/log/binutils.manifest"
+```
+
+Same technique as section 8.1: `find -newer` catches every file `make install` wrote as a before/after snapshot rather than anything parsed out of build output, and the `sed` strips the `$DESTDIR` (i.e. `$VIND`) prefix so the manifest stores paths the way they'll actually be seen once you're inside the chroot (`/usr/bin/as`, not `/mnt/vind/usr/bin/as`). The manifest lives at `$VIND/var/log/binutils.manifest`, i.e. `/var/log/binutils.manifest` once you `chroot` in — keep it there until you're actually ready to remove this binutils, the same way `gcc-pass2.manifest` sits unused between section 8.1 and section 12.5.
+
+Unlike GCC, this guide doesn't remove `binutils` anywhere yet — `ar`/`as`/`ld`/`nm`/`ranlib`/`strip` are still relied on directly by name in several places after this point (section 8's build and `lambda`'s own recipes, among others). Treat this manifest as prep work for a future cleanup pass once LLVM's tools are confirmed to cover everything this system actually needs, not as something section 12 or 13 acts on automatically.
 
 ### 7.7 Linux kernel headers
 
