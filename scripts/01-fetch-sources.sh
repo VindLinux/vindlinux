@@ -82,4 +82,6 @@ wget -c \
     https://ftp.gnu.org/gnu/wget/wget-1.24.5.tar.gz \
     https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz \
     https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.47.0.tar.xz \
-    https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz
+    https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz \
+    https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz \
+    https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
