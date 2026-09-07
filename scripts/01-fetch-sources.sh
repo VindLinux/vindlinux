@@ -21,7 +21,8 @@ wget -nc \
     https://mirrors.edge.kernel.org/gnu/mpfr/mpfr-4.2.2.tar.xz \
     https://mirrors.edge.kernel.org/gnu/mpc/mpc-1.3.1.tar.gz \
     https://mirrors.edge.kernel.org/gnu/gmp/gmp-6.3.0.tar.xz \
-    https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz
+    https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz \
+    https://ftp.barfooze.de/pub/sabotage/tarballs/linux-headers-4.19.88-2.tar.xz
 
 git clone https://github.com/richfelker/musl-cross-make
 
