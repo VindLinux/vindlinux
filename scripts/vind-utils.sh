@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# vind-utils
+#
+# Simple display functions
+
 error() {
   echo '[ERROR]' "$*" >&2
 }

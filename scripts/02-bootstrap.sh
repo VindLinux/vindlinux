@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# 02-bootstrap.sh
+#
+# Cross-compile from the host enough to get a working chroot.
+# Should be small as possible.
+
 . ./vind-config.sh
 . ./vind-utils.sh
 

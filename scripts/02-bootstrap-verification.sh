@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# 02-bootstrap-verification.sh
+#
+# Verify that everything done by the bootstrap completed successfully.
+
 set -u
 
 . ./vind-config.sh
