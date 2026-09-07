@@ -4,8 +4,8 @@
 #
 # Install all packages required by lambda
 
-source ./vind-config.sh
-source ./vind-utils.sh
+. ./vind-config.sh
+. ./vind-utils.sh
 
 # env
 
