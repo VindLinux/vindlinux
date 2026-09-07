@@ -7,13 +7,15 @@ Before starting the build, make sure you have:
 * Git installed.
 * A working internet connection.
 
-Export the VIND build directory:
+Export the VIND directories:
 
 ```sh
 export VIND=/mnt/vind
 export BUILD_VIND="$VIND/building"
 export SOURCES="$BUILD_VIND/sources"
 ```
+
+NOTE: if you change any export you must edit vind-config.sh too.
 
 Create the build directory:
 
