@@ -12,6 +12,7 @@ Export the VIND build directory:
 ```sh
 export VIND=/mnt/vind
 export BUILD_VIND="$VIND/building"
+export SOURCES="$BUILD_VIND/sources"
 ```
 
 Create the build directory:
