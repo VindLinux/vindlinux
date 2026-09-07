@@ -248,6 +248,35 @@ Confirm with a real clone, not just `git --version` (which succeeds either way):
 git clone https://github.com/VindLinux/lambda-manager /tmp/lambda-check
 ```
 
+**`git`'s `make configure` fails immediately with `/bin/sh: autoconf: not found` / `make: *** [Makefile:2685: configure] Error 127`.**
+Section 10.1 now builds `m4` and `autoconf` (in that order) specifically to avoid this — they're two of the eleven packages in this batch, sitting right between `gettext` and `git`. If you're hitting this, either you're working from an older copy of this guide that predates that fix, or you skipped/reordered those two subsections. Either way, build them now, then retry:
+```sh
+cd /usr/src
+tar -xf m4-1.4.19.tar.xz
+cd m4-1.4.19
+./configure --prefix=/usr
+make
+make install
+
+cd /usr/src
+tar -xf autoconf-2.71.tar.xz
+cd autoconf-2.71
+./configure --prefix=/usr
+make
+make install
+```
+Confirm with `autoconf --version`, then retry `git`'s build:
+```sh
+cd /usr/src/git-2.47.0
+make configure
+./configure --prefix=/usr --without-tcltk --disable-nls
+make NO_GETTEXT=1 NO_TCLTK=1
+make NO_GETTEXT=1 NO_TCLTK=1 install
+```
+Why this happens at all: unlike the other hand-built prerequisites in this batch, Git's release tarball doesn't ship a pre-generated `./configure` — the `make configure` target (Git's own `INSTALL` recommends this over a bare autoconf-generated one) has to actually invoke `autoconf` against `configure.ac` to produce one, every single time, tarball or not. `autoconf` in turn depends on GNU `m4` (it's built almost entirely out of `m4` macros). Both ship with their own pre-generated, autoconf-independent `configure` scripts — that's exactly how autoconf avoids needing itself to build itself — so hand-building them ahead of Git is safe and doesn't hit the same chicken-and-egg problem.
+
+Note: installing `gettext` on its own does not address this — `gettext` and `autoconf` are unrelated tools, and Git's own `configure.ac` doesn't use any of gettext's autoconf macros (it only does a plain `AC_CHECK_HEADER([libintl.h], ...)`). If building `gettext` alone made this error go away in some other attempt, something else changed between that attempt and the failing one — most likely `m4`/`autoconf` ended up on `PATH` some other way in that session (e.g. they'd already been built earlier in that run). Run `autoconf --version` in whichever environment "worked" to confirm it's actually present, rather than attributing the fix to `gettext`.
+
 **`git`'s `make` fails with `fatal error: zlib.h: No such file or directory` (in `daemon.c` or elsewhere), even though `/usr/include/zlib.h` exists.**
 Two possible causes, check both:
 1. `zlib` (section 10.1) hasn't actually been built yet. Its tarball should already be in `/usr/src` from section 9.1; build it first:
