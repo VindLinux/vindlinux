@@ -1,7 +1,7 @@
 #!/bin/sh
 
-source ./vind-config.sh
-source ./vind-utils.sh
+. ./vind-config.sh
+. ./vind-utils.sh
 
 mkdir -p "$MARKERS" || {
     error "Failed to create markers directory"
