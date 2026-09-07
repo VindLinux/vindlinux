@@ -61,6 +61,14 @@ After all sources have been downloaded successfully, proceed with the next build
 ./02-bootstrap.sh
 ```
 
+After bootstrap verify:
+
+```sh
+./02-bootstrap-verify.sh
+```
+
+If everything succeeds you can continue
+
 ## Chroot
 
 ```
