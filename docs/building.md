@@ -675,6 +675,10 @@ curl -fL --retry 3 --retry-delay 2 -o git-2.47.0.tar.xz \
     https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.47.0.tar.xz
 curl -fL --retry 3 --retry-delay 2 -o gettext-0.22.5.tar.gz \
     https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz
+curl -fL --retry 3 --retry-delay 2 -o m4-1.4.19.tar.xz \
+    https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
+curl -fL --retry 3 --retry-delay 2 -o autoconf-2.71.tar.xz \
+    https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz
 ```
 
 Verify each archive is actually intact before moving on. This matters more than it looks: a flaky mirror (a redirector like `ftpmirror.gnu.org` bouncing you to an overloaded backend, a connection that drops mid-transfer, `curl -f` not catching every failure mode) can leave a `.tar.gz`/`.tar.xz` on disk that's really an HTML error page, or just truncated — `curl`'s exit code looks fine, the file exists, and the failure only shows up much later as a confusing `tar: Unexpected EOF` or `gzip: invalid compressed data` partway through section 10.1's build, far from where the actual problem happened:
@@ -689,6 +693,8 @@ tar -tzf wget-1.24.5.tar.gz   >/dev/null && echo "wget OK"
 tar -tzf jq-1.7.1.tar.gz      >/dev/null && echo "jq OK"
 tar -tJf git-2.47.0.tar.xz    >/dev/null && echo "git OK"
 tar -tzf gettext-0.22.5.tar.gz >/dev/null && echo "gettext OK"
+tar -tJf m4-1.4.19.tar.xz     >/dev/null && echo "m4 OK"
+tar -tJf autoconf-2.71.tar.xz >/dev/null && echo "autoconf OK"
 ```
 
 `-t` just lists the archive's contents without extracting anything, so this is a cheap way to confirm each file is a valid, complete archive of the right compression type (`-z` for `.tar.gz`, `-J` for `.tar.xz`) before you're several packages deep inside the chroot. If any line doesn't print its `OK`, re-download that one file rather than proceeding — don't assume the others are fine just because these ran, since each archive can fail independently depending on which mirror it happened to land on. `cacert.pem` isn't a tar archive, so it isn't included here; eyeball it instead (`head -1 cacert.pem` should show a `#` comment line, not an HTML `<html>` tag — the latter means the download actually got an error page).
@@ -698,7 +704,8 @@ tar -tzf gettext-0.22.5.tar.gz >/dev/null && echo "gettext OK"
 ```sh
 sha256sum zlib-1.3.1.tar.gz perl-5.40.0.tar.gz openssl-3.5.7.tar.gz \
     curl-8.11.0.tar.gz pkg-config-0.29.2.tar.gz wget-1.24.5.tar.gz \
-    jq-1.7.1.tar.gz git-2.47.0.tar.xz gettext-0.22.5.tar.gz
+    jq-1.7.1.tar.gz git-2.47.0.tar.xz gettext-0.22.5.tar.gz \
+    m4-1.4.19.tar.xz autoconf-2.71.tar.xz
 ```
 
 Compare the output against the `SHA256SUMS`/checksum file each project publishes next to its release (linked from the same release page as the tarball itself) — this guide doesn't pin the hashes inline since they change every time a version in this guide is bumped, but the comparison itself should never be skipped for anything landing outside the chroot's own `curl`-verified HTTPS chain. The same applies to every other hand-fetched tarball earlier in this guide (musl in 7.1, busybox in 7.2, flex in 7.4, and so on) — this note is placed here because 9.1 is the last batch fetched from the host rather than through the chroot's own (by-then-trusted) `curl`, but the habit should start in Phase 1, not here.
@@ -763,13 +770,13 @@ With the Pass 2 compiler in place, anything still built by hand from here on is 
 
 ### 10.1 lambda's own prerequisites
 
-`lambda` itself needs to exist before it can install anything, so its build-time dependencies have to be built by hand, the same way — this is the last hand-built batch before `lambda` takes over. Nine packages: `zlib`, `perl`, `openssl`, `curl`, `pkg-config`, `wget`, `jq`, `gettext` (for `msgfmt`), and `git`. `lambda` is 100% shell script, so `jq` is its one real dependency — it's what `lambda` uses to read the package recipes (JSON) you've been writing. `zlib` isn't something `lambda` itself needs — it's here because `git`'s build unconditionally `#include`s `zlib.h`, and nothing earlier in this guide has installed a copy of it inside `$VIND`. `gettext` likewise isn't a `lambda` dependency — it's here purely because Git's default build tries to compile its own translated message catalogs (`po/*.msg`) with `msgfmt`, which nothing earlier in this guide provides. `pkg-config` isn't a `lambda` dependency either — it's here because `wget`'s `configure` (unlike `curl`'s) queries OpenSSL through `pkg-config` rather than falling back to a manual `-lssl -lcrypto` probe: since OpenSSL 1.0.0, `wget`'s `configure.ac` tries `pkg-config` first for detecting OpenSSL, and with no `pkg-config` on `PATH` at all it hard-fails with `configure: error: The pkg-config script could not be found or is too old` instead of degrading gracefully. `perl` and `openssl` are the odd ones out, and the reason this batch grew from six packages to eight; `pkg-config` is the ninth, added for `wget` specifically — see below.
+`lambda` itself needs to exist before it can install anything, so its build-time dependencies have to be built by hand, the same way — this is the last hand-built batch before `lambda` takes over. Eleven packages: `zlib`, `perl`, `openssl`, `curl`, `pkg-config`, `wget`, `jq`, `gettext` (for `msgfmt`), `m4`, `autoconf`, and `git`. `lambda` is 100% shell script, so `jq` is its one real dependency — it's what `lambda` uses to read the package recipes (JSON) you've been writing. `zlib` isn't something `lambda` itself needs — it's here because `git`'s build unconditionally `#include`s `zlib.h`, and nothing earlier in this guide has installed a copy of it inside `$VIND`. `gettext` likewise isn't a `lambda` dependency — it's here purely because Git's default build tries to compile its own translated message catalogs (`po/*.msg`) with `msgfmt`, which nothing earlier in this guide provides. `pkg-config` isn't a `lambda` dependency either — it's here because `wget`'s `configure` (unlike `curl`'s) queries OpenSSL through `pkg-config` rather than falling back to a manual `-lssl -lcrypto` probe: since OpenSSL 1.0.0, `wget`'s `configure.ac` tries `pkg-config` first for detecting OpenSSL, and with no `pkg-config` on `PATH` at all it hard-fails with `configure: error: The pkg-config script could not be found or is too old` instead of degrading gracefully. `m4` and `autoconf` aren't `lambda` dependencies either — they're here because Git's own `INSTALL` doc has you generate `./configure` with `make configure`, which unconditionally invokes `autoconf` against `configure.ac` (tarball or not; Git's release tarballs don't ship a pre-generated `configure` the way most autotools projects' do), and `autoconf` itself needs `m4` to run at all. Nothing earlier in this guide builds either one. `perl` and `openssl` are the odd ones out, and the reason this batch grew from six packages to eight; `pkg-config` is the ninth, added for `wget` specifically; `m4`/`autoconf` are the tenth and eleventh, added for `git`'s `make configure` step specifically — see below.
 
 Their source tarballs should already be sitting in `/usr/src` from section 9.1 — the steps below skip the download and start from `tar -xf`.
 
 **A real TLS backend is required, not optional, and this is where it gets built.** Earlier drafts of this guide built `curl`/`wget` with `--without-ssl`, on the theory that plain HTTP was good enough for a bootstrap and a TLS library could be added "once decided." It can't be deferred: GitHub (where `lambda-manager` and its package recipes live, section 11.1) dropped the unencrypted `git://` protocol in 2022 and only accepts `https://` now, so `git clone https://github.com/...` — the very next step after this section — hard-fails without real TLS. `openssl` closes that gap. It in turn needs `perl` to run its `Configure`/`config` script — this isn't optional either; OpenSSL's build system is a set of Perl scripts, full stop, and there's no autotools/CMake alternative for it. Building a whole Perl just to satisfy one build-time script feels heavy for a minimal bootstrap, but it's the standard, well-trodden path (LFS itself builds Perl in its base system for exactly this reason — plenty of other packages' build systems assume it exists), and there's no smaller way to get a real `Configure` script to run.
 
-Build order matters here, and it's the order these subsections are written in: `zlib` → `perl` → `openssl` → `curl` → `pkg-config` → `wget` → `jq` → `gettext` → `git`. `perl` has to exist before `openssl` (its `Configure` script needs it), `openssl` has to exist before `curl`/`wget` (they link against it for real HTTPS instead of just being told to skip TLS), `pkg-config` has to exist before `wget` specifically (see above — `curl`'s own `configure` doesn't need it), and `curl` has to exist — with that TLS support already linked in — before `git` (Git decides once, at its own build time, whether to compile `git-remote-https` and whether that helper has anything usable behind it).
+Build order matters here, and it's the order these subsections are written in: `zlib` → `perl` → `openssl` → `curl` → `pkg-config` → `wget` → `jq` → `gettext` → `m4` → `autoconf` → `git`. `perl` has to exist before `openssl` (its `Configure` script needs it), `openssl` has to exist before `curl`/`wget` (they link against it for real HTTPS instead of just being told to skip TLS), `pkg-config` has to exist before `wget` specifically (see above — `curl`'s own `configure` doesn't need it), `curl` has to exist — with that TLS support already linked in — before `git` (Git decides once, at its own build time, whether to compile `git-remote-https` and whether that helper has anything usable behind it), and `m4` has to exist before `autoconf` (which is built almost entirely out of `m4` macros), with both of those existing before `git`'s `make configure` step, which is the one that actually invokes `autoconf`.
 
 #### zlib
 
@@ -948,9 +955,45 @@ If you did build it, verify:
 msgfmt --version
 ```
 
+#### m4
+
+```sh
+cd /usr/src
+tar -xf m4-1.4.19.tar.xz
+cd m4-1.4.19
+
+./configure --prefix=/usr
+make
+make install
+```
+
+Needed only so `autoconf` (next) has something to run against — `m4` is a plain, standalone macro processor, and `autoconf` is built almost entirely out of `m4` macros expanded at `autoconf`-run-time, not at `autoconf`'s own build time. This `configure` is a normal, already-generated autotools script (no bootstrap problem here — `m4` doesn't need `autoconf`, only the other way around). Verify:
+
+```sh
+m4 --version
+```
+
+#### autoconf
+
+```sh
+cd /usr/src
+tar -xf autoconf-2.71.tar.xz
+cd autoconf-2.71
+
+./configure --prefix=/usr
+make
+make install
+```
+
+This is here purely for `git`'s benefit (next). Git's own `INSTALL` doc has you run `make configure` before `./configure` — that target regenerates `configure` from `configure.ac` by invoking `autoconf` directly, every time, regardless of whether the tarball you downloaded already happens to contain a `configure` script. Nothing earlier in this guide provides `autoconf`, so without this step `git`'s `make configure` fails outright with `/bin/sh: autoconf: not found` / `Error 127` — see building-troubleshooting.md if you hit that. Like `m4`, `autoconf`'s own `configure` is a normal pre-generated autotools script; building `autoconf` doesn't itself require `autoconf` to already exist. Verify:
+
+```sh
+autoconf --version
+```
+
 #### git
 
-Built last in this batch, after `perl`/`openssl`/`curl`/`wget`/`jq` — see the build-order note above. `git clone` over `git://` or local paths would work regardless of order, but `git clone https://...` only works if `curl` — built with real TLS support — already existed when `git` itself was configured and built.
+Built last in this batch, after `perl`/`openssl`/`curl`/`wget`/`jq`/`m4`/`autoconf` — see the build-order note above. `git clone` over `git://` or local paths would work regardless of order, but `git clone https://...` only works if `curl` — built with real TLS support — already existed when `git` itself was configured and built.
 
 Git's build also defaults to compiling `git-gui` and other Tcl/Tk-based tools, and to building translated message catalogs with `msgfmt` — neither of which exists yet in this minimal chroot, and neither of which is needed for a minimal bootstrap. Skip both explicitly:
 
@@ -967,7 +1010,7 @@ make NO_GETTEXT=1 NO_TCLTK=1 install
 
 Git's own `INSTALL` doc recommends `make configure` (it generates `./configure` from `configure.ac`) over a plain autoconf-generated one — its `Makefile` already probes for available features via `uname` and doesn't need a full autoconf `configure` to work correctly. `--disable-nls` (plus `NO_GETTEXT=1` on the `make` line, since Git's `Makefile` checks for this independently of what `configure` decided) skips the `msgfmt`-built message catalogs entirely, which is what actually caused the `Error 127` — nothing in this guide builds `gettext`/`msgfmt` by default (see above if you'd rather build it instead of skipping translations). `--without-tcltk` (plus `NO_TCLTK=1`) skips `git-gui`/`gitk`, which need Tcl/Tk — also not built anywhere in this guide, and not needed for a minimal, script-driven bootstrap. Since `curl` was already built — with real TLS support — earlier in this same section, `configure` should auto-detect it and compile in `git-remote-https`, and that helper should actually be able to complete an `https://` handshake rather than just exist. Verify with `git clone https://github.com/VindLinux/lambda-manager /tmp/lambda-check` once installed (see building-troubleshooting.md if this fails with `Protocol "https" not supported` or with `remote helper 'https' aborted session` — they're different failures with different fixes).
 
-If `git`'s `make` fails with `fatal error: zlib.h: No such file or directory`, or with `MSGFMT po/bg.msg` / `Error 127` — see building-troubleshooting.md, both are covered there.
+If `make configure` itself fails with `/bin/sh: autoconf: not found` / `Error 127`, or if the later `git`'s `make` fails with `fatal error: zlib.h: No such file or directory` or `MSGFMT po/bg.msg` / `Error 127` — see building-troubleshooting.md, all three are covered there.
 
 #### resolv.conf
 
