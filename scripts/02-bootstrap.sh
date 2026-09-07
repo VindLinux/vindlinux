@@ -406,6 +406,49 @@ if [ ! -f "$MARKERS/.flex_done" ]; then
     touch "$MARKERS/.flex_done"
 fi
 
+# make
+
+if [ ! -f "$MARKERS/.make_done" ]; then
+    info "Building make"
+
+    mv $SOURCES/minimal-system/make-4.4.1.tar.gz "$VIND/sources" || {
+        error "Failed to move make source"
+        exit 1
+    }
+
+    cd "$VIND/sources" || {
+        error "Failed to enter sources directory"
+        exit 1
+    }
+
+    tar -xf make-4.4.1.tar.gz || {
+        error "Failed to extract make"
+        exit 1
+    }
+
+    cd make-4.4.1 || {
+        error "Failed to enter make source directory"
+        exit 1
+    }
+
+    ./configure --prefix="$PREFIX" --host="$HOST" || {
+        error "make configure failed"
+        exit 1
+    }
+
+    make $MAKEOPTS || {
+        error "make build failed"
+        exit 1
+    }
+
+    make DESTDIR="$DESTDIR" install || {
+        error "make installation failed"
+        exit 1
+    }
+
+    touch "$MARKERS/.make_done"
+fi
+
 # binutils
 
 if [ ! -f "$MARKERS/.binutils_done" ]; then
