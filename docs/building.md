@@ -1250,6 +1250,7 @@ Replace `/etc/lambda/system.json` with the full base package set below, then rec
 cat > /etc/lambda/system.json <<'EOF'
 {
   "packages": [
+    "clang-config",
     "busybox",
     "ln",
     "realpath",
