@@ -73,6 +73,8 @@ fi
 
 # musl-cross-make
 
+export TOOLS="$VIND/tools"
+
 if [ ! -f "$MARKERS/.musl-cross-make_done" ]; then
     info "Building musl-cross-make"
 
@@ -86,7 +88,7 @@ if [ ! -f "$MARKERS/.musl-cross-make_done" ]; then
         exit 1
     }
 
-    mv $SOURCES/musl-cross-make-sources/musl-cross-make . || {
+    mv "$SOURCES/musl-cross-make-sources/musl-cross-make" . || {
         error "Failed to move musl-cross-make"
         exit 1
     }
@@ -95,8 +97,6 @@ if [ ! -f "$MARKERS/.musl-cross-make_done" ]; then
         error "Failed to enter musl-cross-make"
         exit 1
     }
-
-    export TOOLS="$VIND/tools"
 
     cat > config.mak << EOF
 TARGET = x86_64-pc-linux-musl
@@ -114,7 +114,7 @@ EOF
         exit 1
     }
 
-    mv $SOURCES/musl-cross-make-sources/* sources/ || {
+    mv "$SOURCES"/musl-cross-make-sources/* sources/ || {
         error "Failed to move musl-cross-make sources"
         exit 1
     }
@@ -171,7 +171,7 @@ export PATH="$TOOLS/bin:$PATH"
 if [ ! -f "$MARKERS/.musl_done" ]; then
     info "Building musl"
 
-    mv $SOURCES/minimal-system/musl-1.2.5.tar.gz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/musl-1.2.5.tar.gz" "$VIND/sources" || {
         error "Failed to move musl source"
         exit 1
     }
@@ -214,7 +214,7 @@ fi
 if [ ! -f "$MARKERS/.busybox_done" ]; then
     info "Building busybox"
 
-    mv $SOURCES/minimal-system/busybox-1.37.0.tar.bz2 "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/busybox-1.37.0.tar.bz2" "$VIND/sources" || {
         error "Failed to move busybox source"
         exit 1
     }
@@ -307,7 +307,7 @@ fi
 if [ ! -f "$MARKERS/.dash_done" ]; then
     info "Building dash"
 
-    mv $SOURCES/minimal-system/dash-0.5.12.tar.gz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/dash-0.5.12.tar.gz" "$VIND/sources" || {
         error "Failed to move dash source"
         exit 1
     }
@@ -350,7 +350,7 @@ fi
 if [ ! -f "$MARKERS/.flex_done" ]; then
     info "Building flex"
 
-    mv $SOURCES/minimal-system/flex-2.6.4.tar.gz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/flex-2.6.4.tar.gz" "$VIND/sources" || {
         error "Failed to move flex source"
         exit 1
     }
@@ -411,7 +411,7 @@ fi
 if [ ! -f "$MARKERS/.make_done" ]; then
     info "Building make"
 
-    mv $SOURCES/minimal-system/make-4.4.1.tar.gz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/make-4.4.1.tar.gz" "$VIND/sources" || {
         error "Failed to move make source"
         exit 1
     }
@@ -454,7 +454,7 @@ fi
 if [ ! -f "$MARKERS/.binutils_done" ]; then
     info "Building binutils"
 
-    mv $SOURCES/minimal-system/binutils-2.42.tar.xz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/binutils-2.42.tar.xz" "$VIND/sources" || {
         error "Failed to move binutils source"
         exit 1
     }
@@ -514,7 +514,7 @@ fi
 if [ ! -f "$MARKERS/.linux-headers_done" ]; then
     info "Installing Linux headers"
 
-    mv $SOURCES/minimal-system/linux-6.6.79.tar.xz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/linux-6.6.79.tar.xz" "$VIND/sources" || {
         error "Failed to move Linux source"
         exit 1
     }
@@ -547,7 +547,7 @@ fi
 if [ ! -f "$MARKERS/.gcc-pass2_done" ]; then
     info "Building GCC pass 2"
 
-    mv $SOURCES/minimal-system/gcc-13.3.0.tar.xz "$VIND/sources" || {
+    mv "$SOURCES/minimal-system/gcc-13.3.0.tar.xz" "$VIND/sources" || {
         error "Failed to move GCC source"
         exit 1
     }
