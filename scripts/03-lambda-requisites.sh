@@ -315,6 +315,82 @@ if [ ! -f "$MARKERS/.jq_done" ]; then
     touch "$MARKERS/.jq_done"
 fi
 
+# m4
+
+if [ ! -f "$MARKERS/.m4_done" ]; then
+    info "Building m4"
+
+    cd "/usr/src" || {
+        error "Failed to enter sources directory"
+        exit 1
+    }
+
+    tar -xf m4-1.4.19.tar.xz || {
+        error "Failed to extract m4"
+        exit 1
+    }
+
+    cd m4-1.4.19 || {
+        error "Failed to enter m4 source directory"
+        exit 1
+    }
+
+    ./configure --prefix=/usr || {
+        error "Failed to configure m4"
+        exit 1
+    }
+
+    make || {
+        error "Failed to build m4"
+        exit 1
+    }
+
+    make install || {
+        error "Failed to install m4"
+        exit 1
+    }
+
+    touch "$MARKERS/.m4_done"
+fi
+
+# autoconf
+
+if [ ! -f "$MARKERS/.autoconf_done" ]; then
+    info "Building autoconf"
+
+    cd "/usr/src" || {
+        error "Failed to enter sources directory"
+        exit 1
+    }
+
+    tar -xf autoconf-2.71.tar.xz || {
+        error "Failed to extract autoconf"
+        exit 1
+    }
+
+    cd autoconf-2.71 || {
+        error "Failed to enter autoconf source directory"
+        exit 1
+    }
+
+    ./configure --prefix=/usr || {
+        error "Failed to configure autoconf"
+        exit 1
+    }
+
+    make || {
+        error "Failed to build autoconf"
+        exit 1
+    }
+
+    make install || {
+        error "Failed to install autoconf"
+        exit 1
+    }
+
+    touch "$MARKERS/.autoconf_done"
+fi
+
 # git
 
 if [ ! -f "$MARKERS/.git_done" ]; then
