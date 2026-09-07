@@ -1,13 +1,13 @@
 #!/bin/sh
 
 error() {
-  printf '[ERROR]' "$*"
+  echo '[ERROR]' "$*"
 }
 
 warn() {
-  printf '[WARNING]' "$*"
+  echo '[WARNING]' "$*"
 }
 
 info() {
-  printf '[INFO]' "$*"
+  echo '[INFO]' "$*"
 }
