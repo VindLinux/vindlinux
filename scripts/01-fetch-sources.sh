@@ -8,8 +8,8 @@
 
 set -u
 
-source ./vind-config.sh
-source ./vind-utils.sh
+. ./vind-config.sh
+. ./vind-utils.sh
 
 # musl cross make
 
