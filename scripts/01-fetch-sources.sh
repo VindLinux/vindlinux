@@ -25,6 +25,8 @@ wget -nc \
 
 git clone https://github.com/richfelker/musl-cross-make
 
+cd ../..
+
 mkdir -p sources/minimal-system
 
 cd sources/minimal-system
