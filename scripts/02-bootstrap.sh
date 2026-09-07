@@ -129,7 +129,7 @@ EOF
         exit 1
     }
 
-    make install || {
+    make DESTDIR="$DESTDIR" install || {
         error "musl-cross-make installation failed"
         exit 1
     }
@@ -158,6 +158,13 @@ mkdir -p "$VIND/sources" || {
     error "Failed to create sources directory"
     exit 1
 }
+
+export PREFIX=/usr
+export DESTDIR="$VIND"
+export CC="$TOOLS/bin/x86_64-pc-linux-musl-gcc"
+export HOST=x86_64-pc-linux-musl
+export MAKEOPTS=-j$(nproc)
+export PATH="$TOOLS/bin:$PATH"
 
 # musl
 
