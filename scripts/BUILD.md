@@ -55,3 +55,33 @@ The source-fetching script automatically skips packages that have already been d
 
 After all sources have been downloaded successfully, proceed with the next build stage.
 
+## Bootstrap
+
+```sh
+./02-bootstrap.sh
+```
+
+## Chroot
+
+```
+mount --bind /dev "$VIND/dev"
+mount -t proc proc "$VIND/proc"
+mount -t sysfs sys "$VIND/sys"
+mount -t tmpfs tmpfs "$VIND/run"
+
+chroot "$VIND" /bin/dash
+```
+
+/bin/ash works here too. Either shell is fine for everything in this guide; use whichever you prefer.
+
+## Chroot system
+
+```
+cd building/
+```
+
+## Build lambda requisites
+
+```
+./03-lambda-requisites
+```
