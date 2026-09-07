@@ -1,11 +1,11 @@
 #!/bin/sh
 
 error() {
-  echo '[ERROR]' "$*"
+  echo '[ERROR]' "$*" >&2
 }
 
 warn() {
-  echo '[WARNING]' "$*"
+  echo '[WARNING]' "$*" >&2
 }
 
 info() {
