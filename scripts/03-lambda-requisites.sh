@@ -12,6 +12,7 @@ source ./vind-utils.sh
 unset CC CXX PREFIX DESTDIR HOST TOOLS
 unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
 
+export MARKERS="/building/markers"
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin:/usr/lib/llvm/22/bin"
 export CC=gcc
 export CXX=g++
