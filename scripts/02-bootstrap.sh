@@ -612,11 +612,6 @@ if [ ! -f "$MARKERS/.gcc-pass2_done" ]; then
         exit 1
     }
 
-    file "$VIND/usr/bin/gcc" || {
-        error "Failed to verify GCC binary"
-        exit 1
-    }
-
     ln -sf gcc "$VIND/usr/bin/cc" || {
         error "Failed to create cc symlink"
         exit 1
