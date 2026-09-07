@@ -36,6 +36,11 @@ if [ ! -f "$MARKERS/.rootfs_done" ]; then
         exit 1
     }
 
+    mkdir -pv "$VIND"/var/tmp || {
+        error "Failed to create /var/tmp"
+        exit 1
+    }
+
     mkdir -pv "$VIND"/usr/{bin,lib,sbin,include,share,src} || {
         error "Failed to create /usr directories"
         exit 1
