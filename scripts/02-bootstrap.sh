@@ -154,6 +154,11 @@ fi
 
 # minimal system
 
+mkdir -p "$VIND/sources" || {
+    error "Failed to create sources directory"
+    exit 1
+}
+
 # musl
 
 if [ ! -f "$MARKERS/.musl_done" ]; then
@@ -196,5 +201,3 @@ if [ ! -f "$MARKERS/.musl_done" ]; then
 
     touch "$MARKERS/.musl_done"
 fi
-```
-
