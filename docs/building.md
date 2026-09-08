@@ -1173,8 +1173,6 @@ cat > /etc/lambda/system.json <<'EOF'
   ]
 }
 EOF
-
-lambda reconcile
 ```
 
 GCC is deliberately **not** in this list. The Pass 2 compiler on disk (section 8) was installed by hand, outside `lambda` entirely — bringing it into the manifest here would mean `lambda` builds and installs a second, separately-tracked copy of GCC just so there's something for it to purge later, redoing a slow C/C++ bootstrap build for a compiler this guide already has, and needs only long enough to build one thing. Section 8.1 covers this instead: it already recorded, by hand, exactly which files the Pass 2 install wrote into `$VIND`. Section 12.5 removes GCC by deleting those files directly, and doesn't need `lambda` to have ever heard of it.
@@ -1234,6 +1232,12 @@ cat > /usr/share/lambda/packages/cmake.json <<'EOF'
   ]
 }
 EOF
+```
+
+With both recipes confirmed in their original form, reconcile:
+
+```sh
+lambda reconcile
 ```
 
 This step is still going to take a while (LLVM is a large codebase), but it's a small fraction of the time section 13's full reconcile takes, and unlike the old ordering, none of this work gets redone later.
