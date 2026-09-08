@@ -1368,14 +1368,14 @@ lambda mutate append cmake ninja
 lambda reconcile
 ```
 
-Confirm neither binary carries a GCC runtime dependency anymore before moving on:
+Confirm neither binary carries a GCC runtime dependency anymore before moving on. `readelf` isn't available yet at this point in the guide (it ships with `binutils`, not installed until section 13, and LLVM's own build here uses `LLVM_INSTALL_TOOLCHAIN_ONLY=ON`, which skips `llvm-readelf`) — `strings` works just as well for this, since a dynamic library name has to appear as a literal string in the binary for the loader to find it at runtime:
 
 ```sh
-readelf -d /usr/bin/ninja | grep NEEDED
-readelf -d /usr/bin/cmake | grep NEEDED
+strings /usr/bin/ninja | grep -E "libstdc\+\+|libgcc_s"
+strings /usr/bin/cmake | grep -E "libstdc\+\+|libgcc_s"
 ```
 
-Neither should list `libstdc++.so.6` or `libgcc_s.so.1`. If either still does, don't proceed to 12.5 — GCC is the only thing currently satisfying that dependency, and deleting it (12.5) would break that binary immediately, with no compiler left on the system capable of rebuilding it.
+Neither should print anything. If either does, don't proceed to 12.5 — GCC is the only thing currently satisfying that dependency, and deleting it (12.5) would break that binary immediately, with no compiler left on the system capable of rebuilding it.
 
 ### 12.4 Verify Clang can build packages on its own
 
@@ -1432,6 +1432,8 @@ Replace `/etc/lambda/system.json` with the full base package set below, then rec
 
 `bash`, `gzip`, `grep`, `sed`, and `tzdata` are included for the same reason discussed in section 11.5: the recipe convention of treating those first five as an already-guaranteed bootstrap toolchain only becomes true once they're actually installed, and this is where that happens. Once `lambda reconcile` finishes, real GNU `bash` replaces `dash`/`ash` as the interactive shell and `/bin/sh` (update `/etc/passwd`'s shell field and the `EOF`-terminated `#!/bin/sh` assumption in `/etc/profile` if you want `bash` as the default rather than just available), and GNU `gzip`/`grep`/`sed` shadow the Busybox applets of the same name earlier in `$PATH`. `tzdata` provides the `/usr/share/zoneinfo` database that section 14.5 (timezone) and any package doing real date/time handling need — nothing before this point in the guide installs it, and musl's own C library has no bundled zoneinfo data the way some libc's do.
 
+`cmake`, `ninja`, `python`, and `setuptools` are already on disk from section 12 (`llvm`'s dependencies, plus 12.3.1's rebuild of `cmake`/`ninja` against `libc++`) — they're listed here for the same "whole desired state" reason as `llvm`/`libc++`/`libc++abi`/`curl`. Leaving any of them out here would have `lambda` remove them on this reconcile, right before `automake`, `libtool`, and `meson` — new to the manifest at this point — pull them straight back in as dependencies (`meson` needs `python`/`setuptools`; `libtool` needs `automake`; both `meson` and `cmake` end up used as build tools by other packages further down this same list). Listing them explicitly here just avoids that pointless remove-then-reinstall round trip.
+
 ```sh
 cat > /etc/lambda/system.json <<'EOF'
 {
@@ -1446,6 +1448,8 @@ cat > /etc/lambda/system.json <<'EOF'
     "libc++",
     "dhcpcd",
     "llvm",
+    "cmake",
+    "ninja",
     "m4",
     "iproute2",
     "kmod",
@@ -1469,6 +1473,9 @@ cat > /etc/lambda/system.json <<'EOF'
     "libpsl",
     "argp-standalone",
     "perl",
+    "python",
+    "setuptools",
+    "meson",
     "kbd",
     "dracut",
     "ncurses",
@@ -1485,6 +1492,8 @@ cat > /etc/lambda/system.json <<'EOF'
     "xz",
     "libuv",
     "autoconf",
+    "automake",
+    "libtool",
     "e2fsprogs",
     "gfetch",
     "ca-certificates",
