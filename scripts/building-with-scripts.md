@@ -142,3 +142,47 @@ lambda reconcile
 ```
 
 This going take a loooooong time, llvm + dependencies. `lambda reconcile` is what actually pulls in and builds everything `lambda`'s manifest currently declares — starting with LLVM/Clang, which Vind Linux uses to bootstrap off GCC entirely once it's confirmed working. There's no useful way to shortcut this: LLVM is a large C++ codebase and this is the point in the build where that cost gets paid. Let it run; if it stops with an error rather than just running long, check [building-troubleshooting.md](building-troubleshooting.md) before restarting `reconcile` from scratch.
+
+## Installing Runtimes
+
+```sh
+./05-install-runtimes.sh
+```
+
+This switches the native build environment from GCC to LLVM/Clang and installs the C++ runtime used by the rest of the build. It first updates Lambda's build configuration to use `clang` and `clang++`, then installs `libc++` and `libc++abi`, removes the temporary `ninja` and `cmake` bootstrap builds, and rebuilds them against the new runtime.
+
+After the script finishes, verify that neither build tool is still linked against GCC's C++ runtime:
+
+```sh
+strings /usr/bin/ninja | grep -E "libstdc\+\+|libgcc_s"
+strings /usr/bin/cmake | grep -E "libstdc\+\+|libgcc_s"
+```
+
+These commands should produce no output. If either command prints `libstdc++.so` or `libgcc_s.so`, the corresponding tool was still built against the GCC runtime and the runtime transition did not complete correctly.
+
+## Base System
+
+```sh
+./06-install-base-system.sh
+```
+
+This replaces the temporary GCC compiler interface with LLVM/Clang and declares the complete base system in Lambda's system manifest. The script first removes the remaining GCC Pass 2 files and verifies that the original `gcc` executable is gone. It then creates the standard compiler symlinks — `cc`, `gcc`, `c++`, and `g++` — pointing to Clang, so software that expects the traditional compiler names continues to work without bringing GCC back into the system.
+
+The script then writes the final package list to `/etc/lambda/system.json` and runs `lambda reconcile`. From this point onward, the rest of the system is built from the final package manifest rather than the temporary bootstrap environment.
+
+This is the largest Lambda reconciliation in the scripted build: it pulls in the remaining base system, including the shell, core utilities, networking tools, Python, build tools, bootloader utilities, filesystem tools, device management, SSH, and the other packages required for a usable Vind Linux installation.
+
+Let `lambda reconcile` run until it reports that there is nothing left to build:
+
+```text
+lambda: reconciling system packages...
+lambda: nothing to reconcile.
+```
+
+Once this appears, the base system declared by the manifest has been built and installed successfully.
+
+## Build Complete
+
+At this point the scripted build has completed the same bootstrap and native-build stages covered by [building.md](../docs/building.md). The target system contains the final compiler toolchain, Lambda, the base userspace, and the packages declared by the system manifest.
+
+The scripted build is now complete. Continue with [building.md](../docs/building.md) at **Section 14 — System Configuration (line 1524)** to finish configuring the system and complete the installation.
