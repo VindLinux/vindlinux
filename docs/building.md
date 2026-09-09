@@ -1414,12 +1414,16 @@ rm -f /var/log/gcc-pass2.manifest
 
 `xargs -a` reads the manifest one path per line and hands each to `rm -f`, which is quiet about paths that don't exist — harmless here, but worth knowing if the manifest ever ends up stale (a re-run of section 8 without regenerating it, for instance). Deleting the manifest file afterward isn't required for anything later in this guide, but there's no reason to leave a list of already-deleted paths lying around either.
 
-Confirm it's actually gone:
+Confirm it's actually gone and create new symlinks:
 
 ```sh
 which gcc      # should print nothing
 gcc --version  # should fail: command not found
 clang --version
+ln -sf clang /usr/bin/cc
+ln -sf clang /usr/bin/gcc
+ln -sf clang++ /usr/bin/c++
+ln -sf clang++ /usr/bin/g++
 ```
 
 From this point on, Clang/LLVM is the only compiler in Vind Linux's final system state — `gcc` will not appear in `system.json`, on disk, or in `lambda`'s manifest again unless deliberately reinstalled. If a specific package in section 13 turns out to genuinely need GCC (a GNU extension Clang doesn't accept, for instance), rebuilding it the way section 8 did and repeating this removal afterward is the only path back — there's no `lambda mutate append gcc` shortcut anymore, since GCC was never a `lambda` package to begin with.
