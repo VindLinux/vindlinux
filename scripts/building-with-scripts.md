@@ -1,6 +1,6 @@
 # Building Vind Linux (Scripted Build)
 
-> Hit an error partway through a step? Check [building-troubleshooting.md](building-troubleshooting.md) before assuming something's wrong with your host — it's indexed by section number and covers the failures people actually run into at each step.
+> Hit an error partway through a step? Check [building-troubleshooting.md](../docs/building-troubleshooting.md) before assuming something's wrong with your host — it's indexed by section number and covers the failures people actually run into at each step.
 
 This guide walks through building Vind Linux using the numbered scripts shipped in the `vindlinux` repository, instead of running each build step by hand. The scripts wrap the same stages [building.md](building.md) documents manually — Phase 1 bootstrap, `chroot`, and Phase 2's native build up through `lambda` — so if a script fails partway through, the corresponding section of [building.md](building.md) is the place to look for what it's actually doing under the hood and why.
 
