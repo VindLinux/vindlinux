@@ -1649,6 +1649,12 @@ EOF
 
 `LANG`/`LC_ALL` are set to `C.UTF-8` rather than left unset or pointed at something like `en_US.UTF-8`. This isn't the same situation as a glibc-based distro: glibc ships (and, on most distros, lets you generate via `locale-gen`) a real locale database under `/usr/lib/locale` with actual collation rules, date formats, and so on per locale. musl doesn't — musl's locale support is intentionally minimal, and in practice it treats any locale name it doesn't specifically recognize as `C`/`POSIX` and moves on, rather than erroring. `C.UTF-8` is the one exception worth setting explicitly: it gets programs UTF-8-aware string handling (multibyte-safe `wc`, correct-width terminal output, etc.) without depending on a locale database musl doesn't ship. Setting `LANG` to something like `en_US.UTF-8` on this system won't produce an error, but it also won't produce US date/number formatting — it'll silently behave exactly like `C.UTF-8`, which is worth knowing before spending time debugging why a locale-dependent format string isn't doing what it would on a glibc system.
 
+Source the updated profile:
+
+```sh
+. /etc/profile
+```
+
 ### 14.5 Timezone
 
 `/etc/localtime` is how every timezone-aware program (`date`, log timestamps, anything using the C library's `localtime()`) finds out the system's local offset from UTC — without it, the system defaults to UTC, which is a reasonable fallback but not usually what you actually want. This needs the `tzdata` package (section 13) installed first, since that's what provides the `/usr/share/zoneinfo` database `/etc/localtime` points into:
