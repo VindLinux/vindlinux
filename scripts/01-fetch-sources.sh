@@ -84,3 +84,5 @@ wget -c \
     https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.47.0.tar.xz \
     https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz \
     https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
+
+info "fetch sources finished."

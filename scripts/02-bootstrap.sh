@@ -644,3 +644,5 @@ if [ ! -f "$MARKERS/.gcc-pass2_done" ]; then
 
     touch "$MARKERS/.gcc-pass2_done"
 fi
+
+info "bootstrap finished."

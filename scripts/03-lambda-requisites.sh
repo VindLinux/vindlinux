@@ -433,3 +433,5 @@ if [ ! -f "$MARKERS/.git_done" ]; then
 
     touch "$MARKERS/.git_done"
 fi
+
+info "lambda requisites finished."
