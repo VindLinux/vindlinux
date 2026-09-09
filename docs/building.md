@@ -1875,6 +1875,12 @@ lambda mutate append vind-runit
 lambda reconcile
 ```
 
+Don't forget to enable the dhcpcd service:
+
+```sh
+ln -s /etc/sv/dhcpcd /var/service/
+```
+
 `vind-runit` installs runit along with basic utilities and the default stage scripts required by Vind. If boot completes and `runit` starts but every `runsv` fails immediately with `unable to open supervise/lock: read-only file system`, see building-troubleshooting.md.
 
 #### 16.3.1 Wiring up networking and time sync
