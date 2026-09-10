@@ -22,6 +22,15 @@ Before starting the build, make sure you have:
 - Git installed.
 - A working internet connection.
 
+Set the host's DNS resolver before doing anything else below — the `git clone` a few steps down and every download `01-fetch-sources.sh` does afterward depend on it, and a live ISO's default resolver setup can't be relied on (some ship with none configured at all, others hand you whatever the DHCP lease on the install network provided, which may not survive a network change mid-build). This is the same fix [building.md](building.md) section 1 makes by hand for the manual build:
+
+```sh
+cat > /etc/resolv.conf << 'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
+```
+
 Export the VIND directories:
 
 ```sh
