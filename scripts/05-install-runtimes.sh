@@ -31,7 +31,7 @@ export CXXFLAGS="${CFLAGS}"
 # pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
 # and /usr/lib64 so the linker and pkg-config can locate them during
 # builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
+export LDFLAGS="-Wl,--undefined-version,-O1 -L/usr/lib -L/usr/lib64"
 export LIBRARY_PATH="/usr/lib:/usr/lib64"
 export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
 
