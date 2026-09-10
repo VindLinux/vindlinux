@@ -4,6 +4,8 @@
 #
 # As the name suggests, it installs de base system and patches some recipes
 
+. ./vind-config.sh
+
 export MARKERS="/building/markers"
 
 mkdir -p "$MARKERS" || {
