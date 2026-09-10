@@ -99,7 +99,12 @@ done
 mkdir -pv "$VIND"/{dev,proc,sys,run,tmp,home,root,mnt,opt}
 chmod 1777 "$VIND/tmp"
 chmod 1777 "$VIND/var/tmp"
+
+ln -sv ../run "$VIND/var/run"
+ln -sv ../run/lock "$VIND/var/lock"
 ```
+
+`/var/run` and `/var/lock` are symlinked to `/run` here rather than left as real directories — this is the standard FHS arrangement for a system where `/run` is the tmpfs everything actually writes its runtime state (pidfiles, sockets, lock files) into. Skipping this step doesn't fail loudly at build time — `/var/run` and `/var/lock` simply don't exist — but it surfaces later as a boot-time failure: anything that assumes `/var/run/<name>` exists (such as `dhcpcd`'s pidfile handling in section 16.3.1) gets `No such file or directory` from `mkdir()`, because the intermediate `/var/run` path component itself is missing, not just the subdirectory it's trying to create.
 
 This is an empty skeleton. Before we can `chroot` into it, we need a compiler.
 
@@ -1844,7 +1849,7 @@ Vind-Kernel provides some basic `defconfig` files for different use cases. Hardw
 
 See the [VIND.md](https://github.com/VindLinux/vind-kernel/blob/vind/VIND.md) for kernel-specific build instructions and available configurations.
 
-Once the kernel and its modules are installed, generate an initramfs with `dracut`. A few adjustments are required for this to work correctly on musl:
+**An initramfs is not required to boot.** If everything your system needs at boot (root filesystem driver, disk controller, etc.) is built directly into the kernel rather than as a module, GRUB can hand off straight to that kernel with no initramfs involved, and you can skip straight to section 16.3. The steps below only apply if your kernel config builds any of that as a loadable module (`.ko`) instead — in that case, something has to load those modules before the real root can be mounted, and that something is the initramfs:
 
 ```sh
 # depmod must come from kmod, not busybox
@@ -1875,12 +1880,6 @@ lambda mutate append vind-runit
 lambda reconcile
 ```
 
-Don't forget to enable the dhcpcd service:
-
-```sh
-ln -s /etc/sv/dhcpcd /var/service/
-```
-
 `vind-runit` installs runit along with basic utilities and the default stage scripts required by Vind. If boot completes and `runit` starts but every `runsv` fails immediately with `unable to open supervise/lock: read-only file system`, see building-troubleshooting.md.
 
 #### 16.3.1 Wiring up networking and time sync
@@ -1889,13 +1888,32 @@ Section 15 prepared `dhcpcd`'s config and enabled Busybox `ntpd`, but stopped sh
 
 `dhcpcd`'s own `-B`/`--background` flag (the default behavior most other init systems expect) would be wrong here: it tells `dhcpcd` to fork and exit its parent, but the `run` script's own process exiting is exactly what tells `runsv` a service has died — `runsv` would immediately respawn it, spawning another backgrounded copy on top of the first, forever. `exec dhcpcd --nobackground` avoids that: `exec` replaces the `run` script's own process with `dhcpcd` itself, running in the foreground, so the process `runsv` is watching and the process actually doing the work are the same one.
 
+Modern `dhcpcd` builds are compiled with privilege separation (privsep) on by default: a small root-owned process stays root, and everything that actually touches the network runs as an unprivileged user, dropped into a limited/sandboxed environment. That user is `dhcpcd` by default (the build's compiled-in `PRIVSEPUSER`) — it doesn't exist on this system yet, and without it privsep can't drop to anything, which is what the `no such user dhcpcd` message at boot is reporting. Create it as an ordinary system account (no login shell, no password) before the service can start cleanly:
+
 ```sh
-mkdir -p /etc/sv/dhcpcd/log
+groupadd -r dhcpcd
+useradd -r -g dhcpcd -d /var/lib/dhcpcd -s /sbin/nologin -c 'dhcpcd PrivSep' dhcpcd
+mkdir -p /var/lib/dhcpcd /var/run/dhcpcd
+chown dhcpcd:dhcpcd /var/lib/dhcpcd /var/run/dhcpcd
+```
+
+`-r` asks `useradd`/`groupadd` for a system UID/GID instead of one from the regular-user range. `/var/lib/dhcpcd` is where `dhcpcd` keeps its lease database between runs; `/var/run/dhcpcd` is the runtime directory this same privsep process needs to write its pidfile and control socket into — both need to already be owned by `dhcpcd:dhcpcd` before the service starts, rather than relying on the privileged half of `dhcpcd` to create and hand them off correctly on every boot.
+
+`runsv` looks for a `log/run` script inside a service directory the moment it sees a `log` subdirectory at all — an empty `log` directory with no `run` script isn't "no logging configured", it's a service `runsv` expects to supervise and can't, which it treats as fatal (`can't start log/./run: No such file or directory`) and retries in a loop right alongside the main service:
+
+```sh
+mkdir -p /etc/sv/dhcpcd/log/main
 cat > /etc/sv/dhcpcd/run << 'EOF'
 #!/bin/sh
 exec dhcpcd --nobackground
 EOF
 chmod +x /etc/sv/dhcpcd/run
+
+cat > /etc/sv/dhcpcd/log/run << 'EOF'
+#!/bin/sh
+exec svlogd -tt ./main
+EOF
+chmod +x /etc/sv/dhcpcd/log/run
 
 ln -sf /etc/sv/dhcpcd /etc/service/dhcpcd
 ```
