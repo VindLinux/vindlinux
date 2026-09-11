@@ -205,7 +205,8 @@ passwd
 ### 7.2 Your own user (optional)
 
 ```sh
-useradd -m -G wheel -s /bin/sh <username>
+/usr/sbin/groupadd wheel
+/usr/sbin/useradd -m -G wheel -s /bin/sh <username>
 passwd <username>
 ```
 
