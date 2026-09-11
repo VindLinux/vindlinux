@@ -1737,6 +1737,22 @@ rm -rf /tmp/*
 
 Leave `/var/tmp` alone — `chmod 1777` was set on it back in section 5 specifically so ordinary programs can use it at runtime; it's meant to stay, unlike the build-only directories above.
 
+**Installed material nothing on the system actually needs.** Unlike the paths above, the following weren't left over from the build — they're part of what a package installed, still sitting there because nothing removed them afterward:
+
+| Path | Size | Reason |
+|---|---|---|
+| `/usr/lib/python3.13/test` | 139.9M | Python's own test suite; not needed to use Python normally, only to test the CPython build itself |
+| `/usr/lib/perl5/5.40.0` | 62.6M | Old Perl version's module tree — the system runs Perl 5.42; nothing on it should be resolving against 5.40.0 anymore |
+| `/usr/bin/perl5.40.0` | 3.6M | The old Perl binary that goes with the directory above; same reasoning |
+
+```sh
+rm -rf /usr/lib/python3.13/test
+rm -rf /usr/lib/perl5/5.40.0
+rm -f /usr/bin/perl5.40.0
+```
+
+The two Perl paths are worth double-checking before deleting on a system that didn't follow this guide exactly: confirm nothing still points at 5.40.0 (`perl -v`, and `ls -la /usr/bin/perl*` for stray symlinks) before removing it, since an interpreter mismatch here fails a lot less obviously than a missing test suite would.
+
 ## 15. Networking
 
 `/etc/resolv.conf` (below) is the only piece of networking this guide has actually needed so far — it's what let `git`/`curl` inside the chroot resolve hostnames at all back in section 10.1. It says nothing about how an interface gets an address in the first place, which matters once you're booting on real hardware (or a VM) instead of relying on whatever the live ISO's own network setup left behind. This section covers that: bringing an interface up automatically, keeping the clock correct enough for TLS to keep working after reboot, and where firewalling would fit if you need it. The actual "start this at boot" wiring depends on `runit` (installed in section 16.3, right after this), so the pieces below are configuration only — section 16.3 comes back and turns them into running services once there's an init system to hand them to.
