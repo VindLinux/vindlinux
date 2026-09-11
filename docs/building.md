@@ -17,6 +17,10 @@ This guide builds Vind Linux from a live host, through a working `chroot`, up to
 
 Packages built by hand early in this guide get reinstalled through `lambda` once it exists, so the system ends up with a proper manifest instead of files dropped in by hand — see section 11 for how `lambda` itself gets built and used.
 
+> **Note:** the purpose of this guide is to teach how Vind Linux is built, not to produce the smallest possible system. The resulting system intentionally includes components that may not be necessary for a minimal installation, but are useful for building, developing, and understanding the system.
+>
+> If you want an extremely minimal system tailored to your needs, you can use this guide as a starting point and remove or modify components as desired. Alternatively, the normal installation process can be used to install Vind Linux from a prebuilt ISO.
+
 ---
 
 # Phase 1 — Bootstrap
