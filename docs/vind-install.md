@@ -154,7 +154,7 @@ ln -sf /usr/bin/ld.lld       /usr/bin/ld
 ```sh
 lambda mutate append busybox ln realpath diffutils libnl pkgconf dhcpcd iproute2 kmod \
   openssh sqlite3 zstd popt dosfstools libelf musl-fts \
-  shadow make argp-standalone kbd dracut ncurses dash iwd eudev parted readline \
+  shadow make argp-standalone kbd ncurses dash iwd eudev parted readline \
   gawk e2fsprogs ca-certificates dbus util-linux tzdata
 
 lambda reconcile
@@ -385,6 +385,9 @@ Check [VIND.md](https://github.com/VindLinux/vind-kernel/blob/vind/VIND.md) for 
 If everything needed at boot is built into the kernel (not as modules), you don't need an initramfs — skip to 9.3. If any of it's a `.ko` module, set one up:
 
 ```sh
+# must have dracut or any other option
+lambda mutate append dracut
+
 # depmod must come from kmod, not busybox
 rm -f /usr/bin/depmod
 ln -s /usr/bin/kmod /usr/bin/depmod
@@ -393,7 +396,8 @@ depmod <kernel-version>
 # disable i18n unless you need keymap/locale support in the initramfs
 echo 'omit_dracutmodules+=" i18n "' > /etc/dracut.conf.d/no-i18n.conf
 
-dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>
+# generate the initramfs with DRACUT_LDCONFIG=true
+DRACUT_LDCONFIG=true dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>
 ```
 
 You can delete the `vind-kernel` checkout once the kernel's installed — just wait until you've confirmed it actually boots, in case you need to recompile.

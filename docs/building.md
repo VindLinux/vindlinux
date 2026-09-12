@@ -1879,6 +1879,9 @@ depmod <kernel-version>
 
 # disable i18n unless you need keymap/locale support inside the initramfs
 echo 'omit_dracutmodules+=" i18n "' > /etc/dracut.conf.d/no-i18n.conf
+
+# generate the initramfs with DRACUT_LDCONFIG=true
+DRACUT_LDCONFIG=true dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>
 ```
 
 With these in place, `dracut --force /boot/initramfs-<kernel-version>.img <kernel-version>` should complete successfully.
