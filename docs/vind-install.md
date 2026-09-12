@@ -465,7 +465,7 @@ grub-mkconfig -o /boot/grub/grub.cfg
 
 `--removable` also installs a fallback path (`EFI/BOOT/BOOTX64.EFI`) — good to keep on a VM/disk image, drop it on real hardware where a normal NVRAM entry is preferred. Re-run `grub-mkconfig` any time the kernel changes. (`/etc/default/grub` from 7.7 is what `grub-mkconfig` reads.)
 
-**Option B — Limine.** Lighter, faster, config is a plain text file you write by hand instead of one `grub-mkconfig` generates for you.
+**Option B — Limine.** Lighter, faster, config is a plain text file you write by hand instead of one grub-mkconfig generates for you.
 
 ```sh
 lambda mutate append limine
@@ -474,17 +474,29 @@ lambda reconcile
 mkdir -p /boot/efi/EFI/BOOT
 cp /usr/share/limine/BOOTX64.EFI /boot/efi/EFI/BOOT/BOOTX64.EFI
 
-cat > /boot/limine.cfg << EOF
-TIMEOUT=5
+# IMPORTANT: Always copy your kernel to the EFI partition.
+# Limine can struggle to read kernels directly from Btrfs subvolumes.
 
-:Vind Linux
-    PROTOCOL=linux
-    KERNEL_PATH=boot:///vmlinuz-<kernel-version>
-    CMDLINE=root=/dev/vda3 rw
+cp /boot/vmlinuz-<kernel-version> /boot/efi/EFI/BOOT/vmlinuz-<kernel-version>
+
+cat > /boot/efi/EFI/BOOT/limine.conf << EOF
+# Vind Linux Limine configuration
+
+timeout: 5
+default_entry: 1
+
+/Vind Linux
+    protocol: linux
+    kernel_path: boot():/EFI/BOOT/vmlinuz-<kernel-version>
+    # If using an initramfs, uncomment the line below:
+    # module_path: boot():/EFI/BOOT/initramfs-<kernel-version>.img
+    cmdline: root=UUID=<your-root-uuid> rw
+    # cmdline: root=UUID=<your-root-uuid> rootflags=subvol=@ rw (if using Btrfs)
 EOF
 ```
 
-Replace `<kernel-version>` with whatever 9.2 actually built, and add an `INITRD_PATH=` line under the entry if you set up an initramfs. Limine doesn't scan for kernels the way `grub-mkconfig` does — you edit `/boot/limine.cfg` by hand whenever the kernel changes. If you want it registered as a proper NVRAM boot entry instead of relying on the fallback path, `efibootmgr` (from Option A, or installed standalone) still works fine here too.
+Replace <kernel-version> with whatever version actually built. If you set up an initramfs, copy its image to /boot/efi/EFI/BOOT/ as well and uncomment the module_path line under the entry.
+Limine doesn't scan for kernels the way grub-mkconfig does — you edit /boot/efi/EFI/BOOT/limine.conf by hand whenever the kernel changes. If you want it registered as a proper NVRAM boot entry instead of relying on the fallback path, efibootmgr (from Option A, or installed standalone) still works fine here too.
 
 ### 9.5 Leave the chroot and boot
 
