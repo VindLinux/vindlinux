@@ -427,6 +427,7 @@ chown dhcpcd:dhcpcd /var/lib/dhcpcd /var/run/dhcpcd
 mkdir -p /etc/sv/dhcpcd/log/main
 cat > /etc/sv/dhcpcd/run << 'EOF'
 #!/bin/sh
+exec 2>&1
 exec dhcpcd --nobackground
 EOF
 chmod +x /etc/sv/dhcpcd/run
@@ -443,7 +444,7 @@ ln -sf /etc/sv/dhcpcd /etc/service/dhcpcd
 mkdir -p /etc/sv/ntpsync
 cat > /etc/sv/ntpsync/run << 'EOF'
 #!/bin/sh
-busybox ntpd -n -q -p pool.ntp.org
+busybox ntpd -n -q -p pool.ntp.org >/dev/null 2>&1
 exec sleep 999999
 EOF
 chmod +x /etc/sv/ntpsync/run
