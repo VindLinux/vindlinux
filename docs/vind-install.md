@@ -98,9 +98,9 @@ vda    253:0    0   50G  0 disk
 
 ```sh
 cd /mnt/vind
-wget https://github.com/VindLinux/vindlinux/releases/download/0.3/vind-base-0.3-x86_64.tar.xz
-tar -xf vind-base-0.3-x86_64.tar.xz
-rm vind-base-0.3-x86_64.tar.xz
+wget https://github.com/VindLinux/vindlinux/releases/download/0.4/vind-base-0.4-x86_64.tar.xz
+tar -xf vind-base-0.4-x86_64.tar.xz
+rm vind-base-0.4-x86_64.tar.xz
 ```
 
 ## 3. Mount the pseudo filesystems and chroot in
@@ -125,46 +125,22 @@ lambda update
 lambda sync
 ```
 
-## 5. Set up the toolchain symlinks
-
-Vind ships Clang/LLVM as the toolchain, so point the usual GNU names at it:
-
-```sh
-# compilers
-ln -sf /usr/bin/clang   /usr/bin/cc
-ln -sf /usr/bin/clang   /usr/bin/gcc
-ln -sf /usr/bin/clang++ /usr/bin/c++
-ln -sf /usr/bin/clang++ /usr/bin/g++
-
-# llvm-utils
-ln -sf /usr/bin/llvm-ar      /usr/bin/ar
-ln -sf /usr/bin/llvm-ranlib  /usr/bin/ranlib
-ln -sf /usr/bin/llvm-nm      /usr/bin/nm
-ln -sf /usr/bin/llvm-objcopy /usr/bin/objcopy
-ln -sf /usr/bin/llvm-objdump /usr/bin/objdump
-ln -sf /usr/bin/llvm-readobj /usr/bin/readelf
-ln -sf /usr/bin/llvm-strip   /usr/bin/strip
-ln -sf /usr/bin/llvm-strings /usr/bin/strings
-ln -sf /usr/bin/llvm-size    /usr/bin/size
-ln -sf /usr/bin/ld.lld       /usr/bin/ld
-```
-
-## 6. Install the base package set
+## 5. Install the base package set
 
 ```sh
 lambda mutate append busybox ln realpath diffutils libnl pkgconf dhcpcd iproute2 kmod \
   openssh sqlite3 zstd popt dosfstools libelf musl-fts \
   shadow make argp-standalone kbd ncurses dash iwd eudev parted readline \
-  gawk e2fsprogs ca-certificates dbus util-linux tzdata
+  gawk e2fsprogs ca-certificates dbus util-linux tzdata linux-firmware
 
 lambda reconcile
 ```
 
 Feel free to tweak this list — add or drop packages as you need before reconciling.
 
-## 7. Basic system configuration
+## 6. Basic system configuration
 
-### 7.1 Root user + user database
+### 6.1 Root user + user database
 
 Without this, stuff like `whoami` can't even resolve UID 0.
 
@@ -202,7 +178,7 @@ cp /etc/pam.d/other /etc/pam.d/passwd
 passwd
 ```
 
-### 7.2 Your own user (optional)
+### 6.2 Your own user (optional)
 
 ```sh
 /usr/sbin/groupadd wheel
@@ -212,13 +188,13 @@ passwd <username>
 
 Busybox doesn't ship `sudo` or a working `su`, so privilege escalation is up to you to set up later (`sudo`, `doas`, whatever you prefer) — not covered here.
 
-### 7.3 Hostname
+### 6.3 Hostname
 
 ```sh
 echo "my-vind" > /etc/hostname
 ```
 
-### 7.4 /etc/profile
+### 6.4 /etc/profile
 
 ```sh
 cat > /etc/profile << 'EOF'
@@ -242,7 +218,7 @@ EOF
 
 `C.UTF-8` is used instead of something like `en_US.UTF-8` because musl doesn't ship a real locale database — anything it doesn't recognize just silently falls back to `C`/`POSIX` anyway, so `C.UTF-8` is the one that actually gets you UTF-8-aware tools without pretending to be a locale that isn't really there.
 
-### 7.5 Timezone
+### 6.5 Timezone
 
 ```sh
 ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
@@ -257,7 +233,7 @@ hwclock --show
 hwclock --systohc --utc
 ```
 
-### 7.6 Available shells
+### 6.6 Available shells
 
 ```sh
 cat > /etc/shells << 'EOF'
@@ -267,7 +243,7 @@ cat > /etc/shells << 'EOF'
 EOF
 ```
 
-### 7.7 /etc/os-release
+### 6.7 /etc/os-release
 
 ```sh
 cat > /etc/os-release << 'EOF'
@@ -280,7 +256,7 @@ HOME_URL="https://github.com/VindLinux"
 EOF
 ```
 
-### 7.8 GRUB defaults
+### 6.8 GRUB defaults
 
 ```sh
 mkdir -p /etc/default
@@ -295,9 +271,9 @@ EOF
 
 Only relevant if you go with GRUB in 9.4 — `grub-mkconfig`. If you end up picking Limine instead you can skip this step.
 
-## 8. Networking
+## 7. Networking
 
-### 8.1 DNS
+### 7.1 DNS
 
 ```sh
 cat > /etc/resolv.conf << 'EOF'
@@ -306,7 +282,7 @@ nameserver 8.8.8.8
 EOF
 ```
 
-### 8.2 Wired networking with dhcpcd
+### 7.2 Wired networking with dhcpcd
 
 ```sh
 ip link   # find your interface name, e.g. enp0s3 or eth0
@@ -330,7 +306,7 @@ ip addr show <interface-name>
 
 If an address shows up and `/etc/resolv.conf` gets overwritten with DHCP-provided servers, it worked. `dhcpcd -k <interface-name>` tears it back down if you want to retest.
 
-### 8.3 Wireless with iwd (optional)
+### 7.3 Wireless with iwd (optional)
 
 Skip on a VM — only relevant for real wireless hardware.
 
@@ -345,7 +321,7 @@ iwctl
 
 `iwd` only handles the link/auth — you still need `dhcpcd` against the interface afterward to get an IP.
 
-### 8.4 Time sync
+### 7.4 Time sync
 
 ```sh
 busybox ntpd -n -q -p pool.ntp.org
@@ -353,13 +329,13 @@ busybox ntpd -n -q -p pool.ntp.org
 
 One-shot correction, not continuous drift discipline. Matters because a wrong clock breaks TLS handshakes (`curl`, `git`, `lambda reconcile`, etc). This gets wired into boot in section 9.3.
 
-### 8.5 Firewall
+### 7.5 Firewall
 
 Not covered here — nothing in the package list above provides `nftables`/`iptables`. Install one (`lambda mutate append nftables`) and write rules that actually match your setup once you know what the machine's going to do.
 
-## 9. Preparing for boot
+## 8. Preparing for boot
 
-### 9.1 /etc/fstab
+### 8.1 /etc/fstab
 
 ```sh
 cat > /etc/fstab <<'EOF'
@@ -372,7 +348,7 @@ EOF
 
 **Do yourself a favor and use `UUID=...` (from `blkid`) instead of raw `/dev/vdaX` paths** — the above works but is fragile against device renumbering on real hardware.
 
-### 9.2 Kernel
+### 8.2 Kernel
 
 Not in the Lambda repo — build it yourself from the [Vind-Kernel](https://github.com/VindLinux/vind-kernel) tree:
 
@@ -404,7 +380,7 @@ You can delete the `vind-kernel` checkout once the kernel's installed — just w
 
 On real hardware (skip on a VM), you'll also want CPU microcode updates (Intel/AMD) picked up by dracut's early-microcode mechanism — not packaged by Lambda yet, so that's on you for now.
 
-### 9.3 Init system (runit)
+### 8.3 Init system (runit)
 
 Vind defaults to runit but doesn't force it — swap it for whatever you prefer, just know you're on your own for setup.
 
@@ -454,7 +430,7 @@ ln -sf /etc/sv/ntpsync /etc/service/ntpsync
 
 A couple of things worth knowing if you're curious why it's written this way: `--nobackground` is required because `runsv` respawns anything that exits, so a daemon that forks itself into the background looks like a crash. Same idea with the `sleep` in `ntpsync` — a one-shot script that just exits looks like a crashing service and gets respawned in a loop. And the `log/run` script isn't optional once a `log/` directory exists — `runsv` expects one and treats a missing one as fatal. Full explanation is in `building.md` §16.3.1 if you want the details.
 
-### 9.4 Bootloader — GRUB or Limine
+### 8.4 Bootloader — GRUB or Limine
 
 Pick one. Neither is installed by default (section 6 deliberately leaves both out) — grab whichever you want here, then reconcile.
 
@@ -503,7 +479,7 @@ EOF
 Replace <kernel-version> with whatever version actually built. If you set up an initramfs, copy its image to /boot/efi/EFI/BOOT/ as well and uncomment the module_path line under the entry.
 Limine doesn't scan for kernels the way grub-mkconfig does — you edit /boot/efi/EFI/BOOT/limine.conf by hand whenever the kernel changes. If you want it registered as a proper NVRAM boot entry instead of relying on the fallback path, efibootmgr (from Option A, or installed standalone) still works fine here too.
 
-### 9.5 Leave the chroot and boot
+### 8.5 Leave the chroot and boot
 
 ```sh
 exit
@@ -515,7 +491,7 @@ reboot
 
 Pull the install media before it restarts so the firmware boots from `/dev/vda`.
 
-### 9.6 Post-boot smoke test
+### 8.6 Post-boot smoke test
 
 Quick checklist to run once it's up — each line pokes at a different piece, so if something fails you know roughly where to look:
 
