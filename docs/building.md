@@ -1514,7 +1514,13 @@ cat > /etc/lambda/system.json <<'EOF'
     "util-linux",
     "bash",
     "gzip",
-    "tzdata"
+    "tzdata",
+    "wget",
+    "gettext",
+    "git",
+    "jq",
+    "pkgconf",
+    "linux-firmware"
   ]
 }
 EOF
