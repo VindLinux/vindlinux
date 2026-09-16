@@ -14,13 +14,13 @@ The project originally started as **NullOS**, was later renamed to **GroveOS**, 
 
 The current system uses:
 
-* **musl** — C library
-* **LLVM/Clang** — default compiler and toolchain
-* **BusyBox** — core system utilities
-* **runit** — init and service supervision
-* **GRUB** — bootloader
-* **UEFI** — boot environment
-* **Lambda** — package manager
+- **musl** — C library
+- **LLVM/Clang** — default compiler and toolchain
+- **BusyBox** — core system utilities
+- **runit** — default init and service supervision (Vind follows an **init-freedom** approach, so this isn't mandatory)
+- **GRUB/Limine** — bootloader (either is supported; pick one)
+- **UEFI** — boot environment
+- **Lambda** — package manager
 
 ## Current Status
 
@@ -28,13 +28,13 @@ Vind Linux is currently **experimental and under active development**.
 
 The system can already:
 
-* Boot through UEFI and GRUB
-* Start the Linux kernel
-* Initialize through runit
-* Provide agetty terminals
-* Run system services
-* Provide SSH access
-* Install packages using Lambda
+- Boot through UEFI and GRUB/Limine
+- Start the Linux kernel
+- Initialize through runit
+- Provide agetty terminals
+- Run system services
+- Provide SSH access
+- Install packages using Lambda
 
 An official ISO is **not available yet**.
 
@@ -60,12 +60,12 @@ To build your own Vind Linux system:
 
 Vind Linux is built around a few simple ideas:
 
-* Keep the system small.
-* Understand what is running.
-* Avoid unnecessary dependencies.
-* Build components instead of inheriting an entire distribution.
-* Give the user control over the system.
-* Prefer simple, focused tools.
+- Keep the system small.
+- Understand what is running.
+- Avoid unnecessary dependencies.
+- Build components instead of inheriting an entire distribution.
+- Give the user control over the system.
+- Prefer simple, focused tools.
 
 Vind Linux is not trying to be everything for everyone.
 
@@ -83,8 +83,8 @@ It is an experiment in building a Linux system from the ground up.
 
 ## Related Projects
 
-* **[lambda-manager](https://github.com/VindLinux/lambda-manager)** — Vind Linux package manager
-* **[packages](https://github.com/VindLinux/packages)** — Vind Linux package recipes
+- **[lambda-manager](https://github.com/VindLinux/lambda-manager)** — Vind Linux package manager
+- **[packages](https://github.com/VindLinux/packages)** — Vind Linux package recipes
 
 ## Contributing
 

@@ -22,20 +22,20 @@ Instead of installing an entire existing distribution into the target filesystem
 
 Some of the main components include:
 
-* Linux
-* musl
-* BusyBox
-* LLVM/Clang
-* dash
-* runit
-* eudev
-* kmod
-* util-linux
-* ncurses
-* OpenSSL
-* OpenSSH
-* GRUB
-* and other components required to form the system
+- Linux
+- musl
+- BusyBox
+- LLVM/Clang
+- dash
+- runit
+- eudev
+- kmod
+- util-linux
+- ncurses
+- OpenSSL
+- OpenSSH
+- GRUB/Limine
+- and other components required to form the system
 
 The goal was not simply to copy an existing Linux installation, but to build a small and controlled system from individual components.
 
@@ -73,15 +73,17 @@ Vind Linux is built around the idea that every component should have a reason to
 
 ## 6. The Init System
 
-Vind Linux uses **runit** as its init system.
+Vind Linux uses **runit** as its default init system.
+
+Vind follows an **init-freedom** approach: runit is what the project ships and documents, but nothing forces it — a different init system can be used instead, at the cost of setting it up yourself.
 
 The runit initialization structure was configured manually, including its stages and the services required to bring the system up.
 
 The system includes components such as:
 
-* `runit`
-* `agetty`
-* `sshd`
+- `runit`
+- `agetty`
+- `sshd`
 
 Services are managed through `/etc/service`.
 
@@ -89,7 +91,7 @@ The shutdown process is also configured to stop services, synchronize data, disa
 
 ## 7. Boot
 
-The current bootloader is **GRUB**, running in a **UEFI** environment.
+Vind Linux boots through **UEFI**. The bootloader itself isn't fixed — both **GRUB** and **Limine** are supported and documented, and either one can be used interchangeably. Nothing in the rest of the system depends on which one you pick, and swapping in something else entirely is possible too, same as with the init system.
 
 The basic boot process looks like this:
 
@@ -97,7 +99,7 @@ The basic boot process looks like this:
 UEFI
  │
  ▼
-GRUB
+GRUB/Limine
  │
  ▼
 Linux Kernel
@@ -149,7 +151,7 @@ Gentoo Live ISO
       ├── BusyBox
       ├── runit
       ├── kernel
-      ├── GRUB
+      ├── GRUB/Limine
       ├── services
       └── other components
       │
@@ -165,17 +167,17 @@ Vind Linux has a functional base capable of booting and providing a usable envir
 
 The system currently includes components such as:
 
-* UEFI + GRUB boot
-* Linux kernel
-* musl
-* LLVM/Clang
-* BusyBox
-* runit
-* agetty
-* OpenSSH
-* service management
-* package management
-* various system libraries and utilities
+- UEFI + GRUB/Limine boot
+- Linux kernel
+- musl
+- LLVM/Clang
+- BusyBox
+- runit
+- agetty
+- OpenSSH
+- service management
+- package management
+- various system libraries and utilities
 
 There is currently **no official Vind Linux ISO**.
 
@@ -198,4 +200,3 @@ Vind Linux is being built from the bottom up, one component at a time.
 The project has changed names along the way — from **NullOS**, to **GroveOS**, and finally to **Vind Linux** — but the philosophy behind it has remained the same.
 
 And yes, sometimes that means spending hours figuring out why some random fucking library refuses to compile.
-
