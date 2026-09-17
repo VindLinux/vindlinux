@@ -17,39 +17,11 @@ mkdir -p "$MARKERS" || {
 # lambda configuration
 
 if [ ! -f "$MARKERS/.runtime_lambda_config_done" ]; then
-    cat > /etc/lambda/make.conf <<'EOF'
-# Lambda build environment
 
-export CC="clang"
-export CXX="clang++"
-
-export CFLAGS="-O2 -pipe -march=alderlake"
-export CXXFLAGS="${CFLAGS}"
-
-# Library and pkg-config paths.
-# Some packages, such as util-linux, may install libraries and their
-# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
-# and /usr/lib64 so the linker and pkg-config can locate them during
-# builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,--undefined-version,-O1 -L/usr/lib -L/usr/lib64"
-export LIBRARY_PATH="/usr/lib:/usr/lib64"
-export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
-
-export PREFIX="/usr"
-
-export MAKEOPTS="-j6"
-
-# Xorg-specific build environment (used by packages/xorg-libs and any
-# X11-related package).
-
-export XORG_PREFIX="${PREFIX}"
-export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
-EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create lambda make.conf"
+    sed -i -e 's/^export CC="gcc"$/export CC="clang"/' -e 's/^export CXX="g++"$/export CXX="clang++"/' /etc/lambda/make.conf || {
+        error "Failed to switch compiler to clang"
         exit 1
-    fi
+    }
 
     touch "$MARKERS/.runtime_lambda_config_done" || {
         error "Failed to create lambda configuration marker"

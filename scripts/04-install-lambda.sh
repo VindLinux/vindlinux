@@ -101,39 +101,10 @@ if [ ! -f "$MARKERS/.lambda_config_done" ]; then
         exit 1
     }
 
-    cat > /etc/lambda/make.conf << 'EOF'
-# Lambda build environment
-
-export CC="gcc"
-export CXX="g++"
-
-export CFLAGS="-O2 -pipe -march=alderlake"
-export CXXFLAGS="${CFLAGS}"
-
-# Library and pkg-config paths.
-# Some packages, such as util-linux, may install libraries and their
-# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
-# and /usr/lib64 so the linker and pkg-config can locate them during
-# builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
-export LIBRARY_PATH="/usr/lib:/usr/lib64"
-export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
-
-export PREFIX="/usr"
-
-export MAKEOPTS="-j6"
-
-# Xorg-specific build environment (used by packages/xorg-libs and any
-# X11-related package).
-
-export XORG_PREFIX="${PREFIX}"
-export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
-EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create lambda make.conf"
+    sed -i -e 's/^export CC="clang"$/export CC="gcc"/' -e 's/^export CXX="clang++"$/export CXX="g++"/' /etc/lambda/make.conf || {
+        error "Failed to switch compiler to GCC"
         exit 1
-    fi
+    }
 
     cat > /etc/ld-musl-x86_64.path << 'EOF'
 /lib
