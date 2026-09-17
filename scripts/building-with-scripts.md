@@ -92,7 +92,7 @@ This runs Phase 1 of [building.md](building.md) end to end: building the Pass 1 
 After bootstrap verify:
 
 ```sh
-./02-bootstrap-verify.sh
+./02-bootstrap-verification.sh
 ```
 
 This checks the things [building.md](building.md) has you verify by hand at each step of Phase 1 — that musl's dynamic loader landed under `$VIND/usr/lib`, that the cross-built binaries actually link against musl and not the host's glibc, and so on — in one pass instead of one `file`/`find` command per package. If everything succeeds you can continue.
