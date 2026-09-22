@@ -51,11 +51,6 @@ cd sources/minimal-system || {
     exit 1
 }
 
-git clone https://github.com/VindLinux/lambda-manager || {
-    error "Failed to clone lambda-manager"
-    exit 1
-}
-
 wget -c \
     https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz \
     https://mirror.slackbuilds.org/slackware/slackware64-current/source/a/mkinitrd/busybox-1.37.0.tar.bz2 \
@@ -66,7 +61,7 @@ wget -c \
     https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.79.tar.xz \
     https://ftp.gnu.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.xz
 
-# lambda prerequisites
+# lambda prerequisites and lambda itself
 
 mkdir -p "$VIND/usr/src" || {
     error "Failed to create $VIND/usr/src"
@@ -74,6 +69,11 @@ mkdir -p "$VIND/usr/src" || {
 }
 cd "$VIND/usr/src" || {
     error "Failed to enter $VIND/usr/src"
+    exit 1
+}
+
+git clone https://github.com/VindLinux/lambda-manager || {
+    error "Failed to clone lambda-manager"
     exit 1
 }
 

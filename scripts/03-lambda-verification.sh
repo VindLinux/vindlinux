@@ -60,9 +60,6 @@ else
     errors=$((errors + 1))
 fi
 
-# jq
-check_command "jq"
-
 # m4
 check_command "m4"
 

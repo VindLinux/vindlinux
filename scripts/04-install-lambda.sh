@@ -46,6 +46,33 @@ EOF
     }
 fi
 
+# lambda install 
+
+
+if [ ! -f "$MARKERS/.lambda_install_done" ]; then
+    info "Installing lambda"
+
+    cd /sources/lambda-manager || {
+        error "Failed to enter /sources/lambda-manager"
+        exit 1
+    }
+
+    ./installer.sh || exit 1 # no message bc lambda already has error messages on installer
+
+    touch "$MARKERS/.lambda_install_done" || {
+        error "Failed to create lambda install marker"
+        exit 1
+    }
+fi
+
+if [ ! -f "$MARKERS/.lambda_recipes_done" ]; then
+    info "Configuring lambda package recipes"
+
+    mkdir -p /usr/share/lambda/packages || {
+        error "Failed to create lambda package directory"
+        exit 1
+    }
+
 # lambda configuration
 
 if [ ! -f "$MARKERS/.lambda_config_done" ]; then

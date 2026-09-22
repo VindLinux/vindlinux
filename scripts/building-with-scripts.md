@@ -79,7 +79,7 @@ Before starting the build, download all required source packages:
 
 This is the scripted equivalent of the individual `curl`/`wget` calls in [building.md](building.md) sections 6–10 — every tarball the rest of the build needs, fetched once and cached under `$SOURCES`, instead of pulled on demand mid-build. The source-fetching script automatically skips packages that have already been downloaded, so it is safe to run it multiple times: if it fails partway through on a flaky mirror, re-running it picks up only what's missing rather than starting over.
 
-If any link is broken or is too slow, you can edit the file replacing the link with a mirror or downloading it and putting on it respective folder.
+If any link is broken or too slow, you can edit the file replacing the link with a mirror or downloading it and moving to it's respective folder.
 
 After all sources have been downloaded successfully, proceed with the next build stage.
 
