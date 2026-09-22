@@ -29,12 +29,19 @@ wget -c \
     https://mirrors.edge.kernel.org/gnu/mpc/mpc-1.3.1.tar.gz \
     https://mirrors.edge.kernel.org/gnu/gmp/gmp-6.3.0.tar.xz \
     https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz \
-    https://ftp.barfooze.de/pub/sabotage/tarballs/linux-headers-4.19.88-2.tar.xz
-
-git clone https://github.com/richfelker/musl-cross-make || {
-    error "Failed to clone musl-cross-make"
+    https://ftp.barfooze.de/pub/sabotage/tarballs/linux-headers-4.19.88-2.tar.xz || {
+    error "Failed to download musl-cross-make sources"
     exit 1
 }
+
+if [ -d musl-cross-make ]; then
+    info "musl-cross-make already cloned, skipping"
+else
+    git clone https://github.com/richfelker/musl-cross-make || {
+        error "Failed to clone musl-cross-make"
+        exit 1
+    }
+fi
 
 cd ../.. || {
     error "Failed to return to sources directory"
@@ -59,7 +66,10 @@ wget -c \
     https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
     https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz \
     https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.79.tar.xz \
-    https://ftp.gnu.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.xz
+    https://ftp.gnu.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.xz || {
+    error "Failed to download minimal-system sources"
+    exit 1
+}
 
 # lambda prerequisites and lambda itself
 
@@ -72,10 +82,14 @@ cd "$VIND/usr/src" || {
     exit 1
 }
 
-git clone https://github.com/VindLinux/lambda-manager || {
-    error "Failed to clone lambda-manager"
-    exit 1
-}
+if [ -d lambda-manager ]; then
+    info "lambda-manager already cloned, skipping"
+else
+    git clone https://github.com/VindLinux/lambda-manager || {
+        error "Failed to clone lambda-manager"
+        exit 1
+    }
+fi
 
 wget -c \
     https://zlib.net/fossils/zlib-1.3.1.tar.gz \
@@ -87,6 +101,9 @@ wget -c \
     https://ftp.gnu.org/gnu/wget/wget-1.24.5.tar.gz \
     https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.47.0.tar.xz \
     https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz \
-    https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
+    https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz || {
+    error "Failed to download lambda prerequisite sources"
+    exit 1
+}
 
 info "fetch sources finished."
