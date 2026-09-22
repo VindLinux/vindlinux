@@ -274,47 +274,6 @@ if [ ! -f "$MARKERS/.wget_done" ]; then
     touch "$MARKERS/.wget_done"
 fi
 
-# jq
-
-if [ ! -f "$MARKERS/.jq_done" ]; then
-    info "Building jq"
-
-    cd "/usr/src" || {
-        error "Failed to enter sources directory"
-        exit 1
-    }
-
-    tar -xf jq-1.7.1.tar.gz || {
-        error "Failed to extract jq"
-        exit 1
-    }
-
-    cd jq-1.7.1 || {
-        error "Failed to enter jq source directory"
-        exit 1
-    }
-
-    ./configure \
-        --prefix=/usr \
-        --with-oniguruma=builtin \
-        --disable-maintainer-mode || {
-        error "Failed to configure jq"
-        exit 1
-    }
-
-    make || {
-        error "Failed to build jq"
-        exit 1
-    }
-
-    make install || {
-        error "Failed to install jq"
-        exit 1
-    }
-
-    touch "$MARKERS/.jq_done"
-fi
-
 # m4
 
 if [ ! -f "$MARKERS/.m4_done" ]; then

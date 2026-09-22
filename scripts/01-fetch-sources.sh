@@ -51,6 +51,11 @@ cd sources/minimal-system || {
     exit 1
 }
 
+git clone https://github.com/VindLinux/lambda-manager || {
+    error "Failed to clone lambda-manager"
+    exit 1
+}
+
 wget -c \
     https://sources.voidlinux.org/musl-1.2.5/musl-1.2.5.tar.gz \
     https://mirror.slackbuilds.org/slackware/slackware64-current/source/a/mkinitrd/busybox-1.37.0.tar.bz2 \
@@ -80,7 +85,6 @@ wget -c \
     https://curl.se/download/curl-8.11.0.tar.gz \
     https://pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz \
     https://ftp.gnu.org/gnu/wget/wget-1.24.5.tar.gz \
-    https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz \
     https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.47.0.tar.xz \
     https://ftp.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz \
     https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz

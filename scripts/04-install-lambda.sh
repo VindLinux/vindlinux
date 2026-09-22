@@ -46,51 +46,6 @@ EOF
     }
 fi
 
-# prepare system
-
-if [ ! -f "$MARKERS/.prepare_system_done" ]; then
-    info "Preparing system"
-
-    cd /usr/src || {
-        error "Failed to enter sources directory"
-        exit 1
-    }
-
-    if [ ! -d "lambda-manager" ]; then
-        git clone https://github.com/VindLinux/lambda-manager || {
-            error "Failed to clone lambda-manager"
-            exit 1
-        }
-    fi
-
-    if [ ! -d "packages" ]; then
-        git clone https://github.com/VindLinux/packages || {
-            error "Failed to clone packages repository"
-            exit 1
-        }
-    fi
-
-    cp packages/packages/* lambda-manager/packages/ || {
-        error "Failed to copy packages to lambda"
-        exit 1
-    }
-
-    cd lambda-manager || {
-        error "Failed to enter lambda directory"
-        exit 1
-    }
-
-    ./install.sh || {
-        error "Failed to install lambda"
-        exit 1
-    }
-
-    touch "$MARKERS/.prepare_system_done" || {
-        error "Failed to create prepare system marker"
-        exit 1
-    }
-fi
-
 # lambda configuration
 
 if [ ! -f "$MARKERS/.lambda_config_done" ]; then
@@ -118,19 +73,9 @@ EOF
         exit 1
     fi
 
-    cat > /etc/lambda/system.json << 'EOF'
-{
-  "packages": [
-    "llvm",
-    "clang-config"
-  ]
-}
-EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create lambda system configuration"
-        exit 1
-    fi
+    lambda mutate append llvm clang-config || {
+        error "Failed to append clang-config and llvm to system"
+    }
 
     touch "$MARKERS/.lambda_config_done" || {
         error "Failed to create lambda configuration marker"

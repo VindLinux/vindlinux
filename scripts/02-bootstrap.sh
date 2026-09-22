@@ -645,4 +645,11 @@ if [ ! -f "$MARKERS/.gcc-pass2_done" ]; then
     touch "$MARKERS/.gcc-pass2_done"
 fi
 
+# lambda
+
+mv "$SOURCES/minimal-system/lambda-manager" "$VIND/sources" || {
+    error "Failed to move GCC source"
+    exit 1
+}
+
 info "bootstrap finished."
