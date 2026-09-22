@@ -5,6 +5,8 @@
 # Cross-compile from the host enough to get a working chroot.
 # Should be small as possible.
 
+set -u
+
 . ./vind-config.sh
 . ./vind-utils.sh
 
@@ -647,8 +649,8 @@ fi
 
 # lambda
 
-mv "$SOURCES/minimal-system/lambda-manager" "$VIND/sources" || {
-    error "Failed to move GCC source"
+mv "$VIND/usr/src/lambda-manager" "$VIND/sources" || {
+    error "Failed to move lambda-manager"
     exit 1
 }
 
