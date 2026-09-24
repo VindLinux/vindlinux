@@ -928,20 +928,6 @@ wget --version
 
 Should report `+https` in its feature list — if it shows `-https` instead, `pkg-config` didn't actually find `openssl` at configure time even though it built without error; see building-troubleshooting.md.
 
-#### jq
-
-```sh
-cd /usr/src
-tar -xf jq-1.7.1.tar.gz
-cd jq-1.7.1
-
-./configure --prefix=/usr --with-oniguruma=builtin --disable-maintainer-mode
-make
-make install
-```
-
-`--with-oniguruma=builtin` builds jq's regex dependency (oniguruma) from the copy vendored inside the jq release tarball, instead of looking for a system-installed one — nothing provides it yet at this point in the build. `--disable-maintainer-mode` skips re-running `autoreconf` on the bundled `configure`, which needs `bison`/`flex` we haven't built. Once this is installed, `jq --version` should work.
-
 #### gettext (for msgfmt)
 
 Git's default build compiles its translated message catalogs (`po/*.msg`) using `msgfmt`, part of GNU `gettext`. Nothing earlier in this guide installs it, so `make` fails partway through Git's build with `MSGFMT po/bg.msg` / `Error 127` (`127` meaning the shell couldn't find `msgfmt` at all) even though everything up to that point succeeded. Build the whole `gettext` package now, or skip translations entirely at Git's `configure` step (see the note under Git below) — this guide takes the minimalist route and disables Git's translations instead of building all of `gettext` for a single tool, but `gettext` is documented here in case a later package needs it for real:
@@ -1051,14 +1037,13 @@ Then pull in the actual package recipes — a separate repo, since `lambda` itse
 
 ```sh
 git clone https://github.com/VindLinux/packages
-cp packages/packages/* lambda-manager/packages/
 ```
 
 Finally, install:
 
 ```sh
 cd lambda-manager
-./install.sh
+./installer.sh
 ```
 
 Run it as-is, without `sudo` — everything in this guide happens as root inside the chroot already, and nothing built anywhere in this guide provides a `sudo` binary (Busybox's applet list in section 7.2 doesn't enable one), so prefixing this with `sudo` just fails with a "not found"/`applet not found` error rather than doing anything useful.
@@ -1074,50 +1059,12 @@ lambda --help
 `lambda`'s default `make.conf` template uses `clang` as `CC` and `clang++` as `CXX`. Clang doesn't exist yet at this point in the guide — only the Pass 2 GCC from section 8 — so override it to GCC for now:
 
 ```sh
-cat > /etc/lambda/make.conf <<'EOF'
-# Lambda build environment
-
-export CC="gcc"
-export CXX="g++"
-
-export CFLAGS="-O2 -pipe -march=alderlake"
-export CXXFLAGS="${CFLAGS}"
-
-# Library and pkg-config paths.
-# Some packages, such as util-linux, may install libraries and their
-# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
-# and /usr/lib64 so the linker and pkg-config can locate them during
-# builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,-O1 -L/usr/lib -L/usr/lib64"
-export LIBRARY_PATH="/usr/lib:/usr/lib64"
-export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
-
-export PREFIX="/usr"
-
-export MAKEOPTS="-j6"
-
-# Xorg-specific build environment (used by packages/xorg-libs and any
-# X11-related package).
-
-export XORG_PREFIX="${PREFIX}"
-export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
-EOF
-```
-
-and create a ld-musl-x86_64.path
-
-```sh
-cat > /etc/ld-musl-x86_64.path <<'EOF'
-/lib
-/usr/local/lib
-/usr/lib
-/usr/lib64
-EOF
+sed -i -e 's/^export CC="clang"$/export CC="gcc"/' -e 's/^export CXX="clang++"$/export CXX="g++"/'
 ```
 
 ### 11.3 Recommended dependencies
 
-`lambda` itself only needs `jq`, but a lot of the recipes in Vind Linux's `packages` repo need extra tools to build. Worth having these on hand before installing much through `lambda`, since a missing build tool fails mid-recipe rather than up front:
+`lambda` itself dont need much things, but a lot of the recipes in Vind Linux's `packages` repo need extra tools to build. Worth having these on hand before installing much through `lambda`, since a missing build tool fails mid-recipe rather than up front:
 
 ```text
 meson, xz, python3        (build tools)
@@ -1153,16 +1100,6 @@ gcc, binutils, make, bash, coreutils, tar, gzip, xz, sed, grep
 
 Everything else — `zlib`, `ncurses`, `meson`, `cmake`, whatever a package actually needs — gets listed explicitly, even if it happens to already be present from an earlier step in this guide. The rule of thumb: if it's part of the guaranteed bootstrap toolchain, omit it; if it's a library or tool the package actually needs to build, list it.
 
-### 11.6 DESTDIR
-
-`lambda` supports installing into an alternate root, same idea as the `DESTDIR="$VIND"` pattern from Phase 1:
-
-```sh
-DESTDIR=/some/path lambda install vim
-```
-
-Not needed for anything in this guide (we're already native inside the chroot by this point), but relevant if this whole process ever gets restarted from a different host, or used to stage a second Vind Linux install.
-
 ---
 
 ## 12. Bootstrapping Clang/LLVM
@@ -1171,17 +1108,10 @@ An earlier pass of this guide built the entire base system first (the full packa
 
 ### 12.1 Build LLVM/Clang under the Pass 2 GCC
 
-Replace `/etc/lambda/system.json` with a minimal list — just enough to get Clang onto disk, not the rest of the system yet:
+Append llvm and clang-config to `/etc/lambda/system` — just enough to get Clang onto disk, not the rest of the system yet:
 
 ```sh
-cat > /etc/lambda/system.json <<'EOF'
-{
-  "packages": [
-    "llvm",
-    "clang-config"
-  ]
-}
-EOF
+lambda mutate append llvm clang-config
 ```
 
 GCC is deliberately **not** in this list. The Pass 2 compiler on disk (section 8) was installed by hand, outside `lambda` entirely — bringing it into the manifest here would mean `lambda` builds and installs a second, separately-tracked copy of GCC just so there's something for it to purge later, redoing a slow C/C++ bootstrap build for a compiler this guide already has, and needs only long enough to build one thing. Section 8.1 covers this instead: it already recorded, by hand, exactly which files the Pass 2 install wrote into `$VIND`. Section 12.5 removes GCC by deleting those files directly, and doesn't need `lambda` to have ever heard of it.
@@ -1190,60 +1120,7 @@ GCC is deliberately **not** in this list. The Pass 2 compiler on disk (section 8
 
 `llvm` itself depends on `cmake`, `ninja`, and `libffi`, so `lambda` builds all three as part of this same reconcile, before `llvm` proper. `cmake` and `ninja` are both written in C++, same as LLVM — at this point in the guide that means they compile under the Pass 2 GCC too, since Clang doesn't exist yet and `libc++`/`libc++abi` won't until 12.3. Their recipes reflect that: no `-stdlib=libc++`, no compiler pinned explicitly, just whatever `CC`/`CXX` (still GCC, per 11.2) resolves to on `$PATH`. Confirm they're in this original, GCC-era form before reconciling — section 12.3.1 replaces both once Clang's C++ runtime actually exists to build them against:
 
-```sh
-cat > /usr/share/lambda/packages/ninja.json <<'EOF'
-{
-  "name": "ninja",
-  "description": "Small, fast build system designed to have build files generated by higher-level build systems such as Meson or CMake, focused on speed for incremental builds.",
-  "version": "1.13.2",
-  "dependencies": [],
-  "download": [
-    "curl -fL --retry 3 --retry-delay 2 -o ninja-1.13.2.tar.gz https://github.com/ninja-build/ninja/archive/refs/tags/v1.13.2.tar.gz",
-    "tar -xf ninja-1.13.2.tar.gz"
-  ],
-  "build": [
-    "cd ninja-1.13.2 && python3 configure.py --bootstrap"
-  ],
-  "install": [
-    "install -Dm755 ninja-1.13.2/ninja \"$DESTDIR$PREFIX/bin/ninja\""
-  ],
-  "strip": [
-    "find \"$DESTDIR$PREFIX\" -type f -exec sh -c 'file \"$1\" | grep -q \"ELF\" && strip --strip-unneeded \"$1\"' _ {} \\; 2>/dev/null || true"
-  ]
-}
-EOF
-
-cat > /usr/share/lambda/packages/cmake.json <<'EOF'
-{
-  "name": "cmake",
-  "description": "A modern toolset used for generating Makefiles and other build systems.",
-  "version": "4.2.3",
-  "dependencies": [
-    "curl",
-    "libarchive",
-    "libuv",
-    "nghttp2"
-  ],
-  "download": [
-    "curl -fL --retry 3 --retry-delay 2 -o cmake-4.2.3.tar.gz https://cmake.org/files/v4.2/cmake-4.2.3.tar.gz",
-    "tar -xf cmake-4.2.3.tar.gz"
-  ],
-  "build": [
-    "cd cmake-4.2.3 && sed -i '/\"lib64\"/s/64//' Modules/GNUInstallDirs.cmake",
-    "cd cmake-4.2.3 && LD_LIBRARY_PATH=\"$PREFIX/lib\" CFLAGS=\"-pthread $CFLAGS\" CXXFLAGS=\"-pthread $CXXFLAGS\" LDFLAGS=\"-pthread $LDFLAGS\" ./bootstrap --prefix=\"$PREFIX\" --system-libs --mandir=/share/man --no-system-jsoncpp --no-system-cppdap --no-system-librhash --docdir=/share/doc/cmake-4.2.3",
-    "cd cmake-4.2.3 && make $MAKEOPTS"
-  ],
-  "install": [
-    "cd cmake-4.2.3 && make DESTDIR=\"$DESTDIR\" install"
-  ],
-  "strip": [
-    "find \"$DESTDIR$PREFIX\" -type f -exec sh -c 'file \"$1\" | grep -q \"ELF\" && strip --strip-unneeded \"$1\"' _ {} \\; 2>/dev/null || true"
-  ]
-}
-EOF
-```
-
-With both recipes confirmed in their original form, reconcile:
+Now reconcile:
 
 ```sh
 lambda reconcile
@@ -1256,34 +1133,7 @@ This step is still going to take a while (LLVM is a large codebase), but it's a 
 `lambda`'s default `make.conf` template assumes Clang (`CC=clang`, `CXX=clang++`); section 11.2 overrode it to GCC so 12.1's `llvm` build had a known-good, already-native compiler to work with. Now that Clang exists, switch back:
 
 ```sh
-cat > /etc/lambda/make.conf <<'EOF'
-# Lambda build environment
-
-export CC="clang"
-export CXX="clang++"
-
-export CFLAGS="-O2 -pipe -march=alderlake"
-export CXXFLAGS="${CFLAGS}"
-
-# Library and pkg-config paths.
-# Some packages, such as util-linux, may install libraries and their
-# pkg-config files under /usr/lib64 on x86_64. Include both /usr/lib
-# and /usr/lib64 so the linker and pkg-config can locate them during
-# builds, regardless of which directory provides the required files.
-export LDFLAGS="-Wl,--undefined-version,-O1 -L/usr/lib -L/usr/lib64"
-export LIBRARY_PATH="/usr/lib:/usr/lib64"
-export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig"
-
-export PREFIX="/usr"
-
-export MAKEOPTS="-j6"
-
-# Xorg-specific build environment (used by packages/xorg-libs and any
-# X11-related package).
-
-export XORG_PREFIX="${PREFIX}"
-export XORG_CONFIG="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-static"
-EOF
+sed -i -e 's/^export CC="gcc"$/export CC="clang"/' -e 's/^export CXX="g++"$/export CXX="clang++"/'
 ```
 
 Confirm the shell itself can find Clang too, not just `lambda`'s build environment:
@@ -1309,66 +1159,8 @@ lambda reconcile
 `libc++`/`libc++abi` now exist (12.3), so this is the point to force both back onto Clang's C++ runtime instead of GCC's — before GCC disappears, and before section 13 builds anything else against these two as build tools. Purge and reconcile first, to confirm the removal itself doesn't break anything else on `system.json`:
 
 ```sh
-lambda mutate purge ninja cmake
-lambda reconcile
+lambda force-remove ninja cmake
 ```
-
-Then replace both recipes with versions that pin Clang explicitly and force `-stdlib=libc++`, instead of relying on whatever `CXX`/`PATH` happened to resolve to at build time:
-
-```sh
-cat > /usr/share/lambda/packages/ninja.json <<'EOF'
-{
-  "name": "ninja",
-  "description": "Small, fast build system designed to have build files generated by higher-level build systems such as Meson or CMake, focused on speed for incremental builds.",
-  "version": "1.13.2",
-  "dependencies": [],
-  "download": [
-    "curl -fL --retry 3 --retry-delay 2 -o ninja-1.13.2.tar.gz https://github.com/ninja-build/ninja/archive/refs/tags/v1.13.2.tar.gz",
-    "tar -xf ninja-1.13.2.tar.gz"
-  ],
-  "build": [
-    "cd ninja-1.13.2 && CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS -stdlib=libc++\" LDFLAGS=\"$LDFLAGS -stdlib=libc++\" python3 configure.py --bootstrap"
-  ],
-  "install": [
-    "install -Dm755 ninja-1.13.2/ninja \"$DESTDIR$PREFIX/bin/ninja\""
-  ],
-  "strip": [
-    "find \"$DESTDIR$PREFIX\" -type f -exec sh -c 'file \"$1\" | grep -q \"ELF\" && strip --strip-unneeded \"$1\"' _ {} \\; 2>/dev/null || true"
-  ]
-}
-EOF
-
-cat > /usr/share/lambda/packages/cmake.json <<'EOF'
-{
-  "name": "cmake",
-  "description": "A modern toolset used for generating Makefiles and other build systems.",
-  "version": "4.2.3",
-  "dependencies": [
-    "curl",
-    "libarchive",
-    "libuv",
-    "nghttp2"
-  ],
-  "download": [
-    "curl -fL --retry 3 --retry-delay 2 -o cmake-4.2.3.tar.gz https://cmake.org/files/v4.2/cmake-4.2.3.tar.gz",
-    "tar -xf cmake-4.2.3.tar.gz"
-  ],
-  "build": [
-    "cd cmake-4.2.3 && sed -i '/\"lib64\"/s/64//' Modules/GNUInstallDirs.cmake",
-    "cd cmake-4.2.3 && LD_LIBRARY_PATH=\"$PREFIX/lib\" CC=\"$CC\" CXX=\"$CXX\" CFLAGS=\"-pthread $CFLAGS\" CXXFLAGS=\"-pthread -stdlib=libc++ $CXXFLAGS\" LDFLAGS=\"-stdlib=libc++ $LDFLAGS\" ./bootstrap --prefix=\"$PREFIX\" --system-libs --mandir=/share/man --no-system-jsoncpp --no-system-cppdap --no-system-librhash --docdir=/share/doc/cmake-4.2.3",
-    "cd cmake-4.2.3 && make $MAKEOPTS"
-  ],
-  "install": [
-    "cd cmake-4.2.3 && make DESTDIR=\"$DESTDIR\" install"
-  ],
-  "strip": [
-    "find \"$DESTDIR$PREFIX\" -type f -exec sh -c 'file \"$1\" | grep -q \"ELF\" && strip --strip-unneeded \"$1\"' _ {} \\; 2>/dev/null || true"
-  ]
-}
-EOF
-```
-
-These edits only make sense from this point on — `-stdlib=libc++` requires `libc++`/`libc++abi` to already be on disk (12.3), and would fail to compile anything at all if applied any earlier in the guide.
 
 Reinstall both against the corrected recipes:
 
@@ -1448,82 +1240,10 @@ Replace `/etc/lambda/system.json` with the full base package set below, then rec
 `cmake`, `ninja`, `python`, and `setuptools` are already on disk from section 12 (`llvm`'s dependencies, plus 12.3.1's rebuild of `cmake`/`ninja` against `libc++`) — they're listed here for the same "whole desired state" reason as `llvm`/`libc++`/`libc++abi`/`curl`. Leaving any of them out here would have `lambda` remove them on this reconcile, right before `automake`, `libtool`, and `meson` — new to the manifest at this point — pull them straight back in as dependencies (`meson` needs `python`/`setuptools`; `libtool` needs `automake`; both `meson` and `cmake` end up used as build tools by other packages further down this same list). Listing them explicitly here just avoids that pointless remove-then-reinstall round trip.
 
 ```sh
-cat > /etc/lambda/system.json <<'EOF'
-{
-  "packages": [
-    "clang-config",
-    "busybox",
-    "ln",
-    "realpath",
-    "diffutils",
-    "libnl",
-    "pkgconf",
-    "libc++",
-    "dhcpcd",
-    "llvm",
-    "cmake",
-    "ninja",
-    "m4",
-    "iproute2",
-    "kmod",
-    "musl-obstack",
-    "openssh",
-    "sqlite3",
-    "zstd",
-    "efibootmgr",
-    "curl",
-    "popt",
-    "dosfstools",
-    "libelf",
-    "musl-fts",
-    "libffi",
-    "efivar",
-    "grub",
-    "nghttp2",
-    "libc++abi",
-    "shadow",
-    "make",
-    "libpsl",
-    "argp-standalone",
-    "perl",
-    "python",
-    "setuptools",
-    "meson",
-    "kbd",
-    "dracut",
-    "ncurses",
-    "dash",
-    "iwd",
-    "zlib",
-    "eudev",
-    "parted",
-    "expat",
-    "openssl",
-    "readline",
-    "libarchive",
-    "gawk",
-    "xz",
-    "libuv",
-    "autoconf",
-    "automake",
-    "libtool",
-    "e2fsprogs",
-    "gfetch",
-    "ca-certificates",
-    "dbus",
-    "util-linux",
-    "bash",
-    "gzip",
-    "tzdata",
-    "wget",
-    "gettext",
-    "git",
-    "jq",
-    "pkgconf",
-    "linux-firmware"
-  ]
-}
-EOF
+lambda mutate append busybox ln realpath diffutils libnl pkgconf dhcpcd iproute2 kmod \
+  openssh sqlite3 zstd popt dosfstools libelf musl-fts \
+  shadow make argp-standalone kbd ncurses dash iwd eudev parted readline \
+  gawk e2fsprogs ca-certificates dbus util-linux tzdata linux-firmware
 ```
 
 Then reconcile:
