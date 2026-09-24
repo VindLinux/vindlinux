@@ -50,18 +50,13 @@ fi
 
 # remove bootstrap tools
 
-if [ ! -f "$MARKERS/.runtime_bootstrap_purge_done" ]; then
-    lambda mutate purge ninja cmake || {
-        error "Failed to purge ninja and cmake"
+if [ ! -f "$MARKERS/.runtime_bootstrap_remove_done" ]; then
+    lambda force-remove ninja cmake || {
+        error "Failed to remove ninja and cmake"
         exit 1
-    }
+		}
 
-    lambda reconcile || {
-        error "Failed to reconcile after purging ninja and cmake"
-        exit 1
-    }
-
-    touch "$MARKERS/.runtime_bootstrap_purge_done" || {
+    touch "$MARKERS/.runtime_bootstrap_remove_done" || {
         error "Failed to create bootstrap purge marker"
         exit 1
     }
