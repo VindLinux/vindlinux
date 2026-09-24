@@ -127,9 +127,9 @@ lambda sync
 ## 5. Install the base package set
 
 ```sh
-lambda mutate append busybox ln realpath diffutils libnl pkgconf dhcpcd iproute2 kmod \
+lambda mutate append ln realpath diffutils libnl dhcpcd iproute2 kmod \
   openssh sqlite3 zstd popt dosfstools libelf musl-fts \
-  shadow make argp-standalone kbd ncurses dash iwd eudev parted readline \
+  shadow argp-standalone kbd ncurses iwd eudev parted readline \
   gawk e2fsprogs ca-certificates dbus util-linux tzdata linux-firmware
 
 lambda reconcile
