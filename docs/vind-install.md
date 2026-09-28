@@ -345,7 +345,19 @@ cat > /etc/fstab <<'EOF'
 EOF
 ```
 
-**Do yourself a favor and use `UUID=...` (from `blkid`) instead of raw `/dev/vdaX` paths** — the above works but is fragile against device renumbering on real hardware.
+**Do yourself a favor and use `PARTUUID=...` (from `blkid`) instead of raw `/dev/vdaX` paths** — the above works but is fragile against device renumbering on real hardware.
+
+> **Use `PARTUUID=` instead of `UUID=`.**
+>
+> `UUID=` does technically work in `fstab`, since it's resolved by `libblkid` in userspace rather than by the kernel. However, `blkid` enumerates block devices via `/sys/block`, so resolving it too early in boot (before `/proc` and `/sys` are mounted) will fail silently. Using `PARTUUID=` avoids this dependency and keeps the identification method consistent with `limine.conf`.
+>
+> ```
+> # Avoid
+> UUID=<uuid>   /   ext4   defaults   0   1
+>
+> # Preferred
+> PARTUUID=<partuuid>   /   ext4   defaults   0   1
+> ```
 
 ### 8.2 Kernel
 
@@ -470,10 +482,24 @@ default_entry: 1
     kernel_path: boot():/EFI/BOOT/vmlinuz-<kernel-version>
     # If using an initramfs, uncomment the line below:
     # module_path: boot():/EFI/BOOT/initramfs-<kernel-version>.img
-    cmdline: root=UUID=<your-root-uuid> rw
-    # cmdline: root=UUID=<your-root-uuid> rootflags=subvol=@ rw (if using Btrfs)
+    cmdline: root=PARTUUID=<your-root-partuuid> rw rootwait
+    # cmdline: root=PARTUUID=<your-root-partuuid> rootflags=subvol=@ rw rootwait (if using Btrfs)
 EOF
 ```
+
+> **Use `PARTUUID=` or a direct device node (`/dev/vda3`, etc.) — `UUID=` is not supported.**
+>
+> The kernel's `root=` parser (`block/early-lookup.c`) has no filesystem-UUID resolution path without an initrd/udev populating `/dev/disk/by-uuid/`. If you're booting a monolithic kernel with no initrd (the common case in 8.2), `root=UUID=...` falls through to numeric parsing, fails, disables `rootwait` early, and causes a kernel panic even though the device is available.
+>
+> `PARTUUID=` is resolved natively by the kernel (reads the GPT table directly, no userspace involved) and is the recommended option, as it's guaranteed regardless of kernel build/config.
+>
+> ```
+> # Wrong — unsupported without an initrd
+> cmdline: root=UUID=<uuid> rw
+>
+> # Correct
+> cmdline: root=PARTUUID=<partuuid> rw rootwait
+> ```
 
 Replace <kernel-version> with whatever version actually built. If you set up an initramfs, copy its image to /boot/efi/EFI/BOOT/ as well and uncomment the module_path line under the entry.
 Limine doesn't scan for kernels the way grub-mkconfig does — you edit /boot/efi/EFI/BOOT/limine.conf by hand whenever the kernel changes. If you want it registered as a proper NVRAM boot entry instead of relying on the fallback path, efibootmgr (from Option A, or installed standalone) still works fine here too.
