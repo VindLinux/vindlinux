@@ -1579,7 +1579,7 @@ cat > /etc/fstab <<'EOF'
 EOF
 ```
 
-This uses the raw device paths (`/dev/vda1`/`/dev/vda2`/`/dev/vda3`) to match how this guide partitioned the disk in section 2. Swapping these for `UUID=...` entries (from `blkid`) is more robust against device renumbering on real hardware, and worth doing before relying on this install long-term — but it isn't required to boot.
+This uses the raw device paths (`/dev/vda1`/`/dev/vda2`/`/dev/vda3`) to match how this guide partitioned the disk in section 2. Swapping these for `PARTUUID=...` entries (from `blkid`) is more robust against device renumbering on real hardware, and worth doing before relying on this install long-term — but it isn't required to boot.
 
 ### 16.2 Kernel
 
