@@ -98,8 +98,8 @@ vda    253:0    0   50G  0 disk
 
 ```sh
 cd /mnt/vind
-wget https://github.com/VindLinux/vindlinux/releases/download/0.5/vind-base-0.5-x86_64.tar.xz
-tar -xf vind-base-0.5-x86_64.tar.xz
+wget https://github.com/VindLinux/vindlinux/releases/download/0.6/vind-base-0.6-x86_64.tar.xz
+tar -xf vind-base-0.6-x86_64.tar.xz
 ```
 
 ## 3. Mount the pseudo filesystems and chroot in
